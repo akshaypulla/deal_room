@@ -75,6 +75,7 @@ class DealRoomEnvironment:
 
         self._state = DealRoomState(
             episode_id=episode_id or str(uuid.uuid4())[:8],
+            step_count=0,
             task_id=task_id,
             round_number=0,
             max_rounds=int(self._scenario["template"]["max_rounds"]),
@@ -223,6 +224,7 @@ class DealRoomEnvironment:
 
         self._prev_bands = self._current_bands()
         self._state.round_number += 1
+        self._state.step_count = self._state.round_number
         return observation, reward, done, info
 
     @property

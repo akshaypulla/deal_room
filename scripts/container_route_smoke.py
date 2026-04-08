@@ -20,6 +20,7 @@ def request(
     method: str = "GET",
     payload: dict | None = None,
     expected: int = 200,
+    parse_json: bool = True,
 ):
     data = None
     headers = {}
@@ -36,6 +37,8 @@ def request(
         status = exc.code
     if status != expected:
         raise SystemExit(f"{method} {path} expected {expected}, got {status}: {body}")
+    if not parse_json:
+        return body
     return json.loads(body) if body else None
 
 
@@ -143,6 +146,11 @@ def run_task_flow(task_id: str, seed: int) -> None:
 
 
 def main():
+    web_page = request("/web", parse_json=False)
+    assert "Playground" in web_page
+    assert "Custom" in web_page
+    assert "deal-room" in web_page.lower()
+
     health = request("/health")
     assert health["status"] == "ok"
     assert health["service"] == "deal-room"

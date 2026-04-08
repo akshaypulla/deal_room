@@ -5,7 +5,7 @@ colorFrom: yellow
 colorTo: blue
 sdk: docker
 pinned: false
-app_port: 8000
+app_port: 7860
 base_path: /web
 tags:
   - openenv
@@ -16,6 +16,8 @@ tags:
 Deal Room is an OpenEnv environment for enterprise software negotiation. The agent acts as a vendor-side negotiator trying to close a realistic B2B deal against a dynamic internal buying committee with hidden constraints, approval chains, and irreversible trust damage.
 
 This V2.5 environment is built to be useful for RL and agent evaluation, not just scripted prompting. Each episode generates a seeded scenario with `2-4` stakeholders, `1-2` hidden hard constraints, up to `2` internal relationship edges, dense milestone rewards, and a deterministic terminal grader.
+
+The web UI at `/web` keeps the native OpenEnv `Playground` untouched and adds a second `Custom` tab for judges. That custom tab includes a guided walkthrough, live sandbox, judge lens, counterfactual warnings, mistake tracking, and replay diff views.
 
 ## Why this is different
 
@@ -71,7 +73,7 @@ All tasks return rewards in `[0.0, 1.0]`. Intermediate steps use bounded dense r
 pip install -r requirements.txt
 pytest -q
 openenv validate
-uvicorn server.app:app --reload --port 8000
+uvicorn server.app:app --reload --port 7860
 ```
 
 ## Docker

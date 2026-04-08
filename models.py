@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DealRoomAction(BaseModel):
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     action_type: str = "direct_message"
     target: str = "all"
     target_ids: List[str] = Field(default_factory=list)
@@ -39,6 +40,8 @@ class DealRoomAction(BaseModel):
 
 
 class DealRoomObservation(BaseModel):
+    reward: Optional[float] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
     round_number: int = 0
     max_rounds: int = 10
     stakeholders: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
@@ -61,6 +64,7 @@ class DealRoomObservation(BaseModel):
 
 class DealRoomState(BaseModel):
     episode_id: str = ""
+    step_count: int = 0
     task_id: str = ""
     round_number: int = 0
     max_rounds: int = 10

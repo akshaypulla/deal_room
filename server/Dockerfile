@@ -73,6 +73,10 @@ ENV TRANSFORMERS_CACHE=/opt/hf-home
 # Set PYTHONPATH so imports work correctly
 ENV PYTHONPATH="/app/env:$PYTHONPATH"
 
+# enable web interface
+ENV ENABLE_WEB_INTERFACE=true
+ENV PORT=7860
+
 RUN mkdir -p /opt/hf-home && python - <<'PY'
 try:
     from sentence_transformers import SentenceTransformer
@@ -83,8 +87,9 @@ PY
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:7860/health || exit 1
 
 # Run the FastAPI server
 # The module path is constructed to work with the /app/env structure
-CMD ["sh", "-c", "cd /app/env && uvicorn server.app:app --host 0.0.0.0 --port 8000"]
+EXPOSE 7860
+CMD ["sh", "-c", "cd /app/env && uvicorn server.app:app --host 0.0.0.0 --port 7860"]
