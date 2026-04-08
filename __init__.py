@@ -8,12 +8,13 @@
 
 from .client import DealRoomEnv
 from .server.deal_room_environment import DealRoomEnvironment
-from .models import DealRoomAction, DealRoomObservation, DealRoomState
+from .models import DealRoomAction, DealRoomObservation, DealRoomReward, DealRoomState
 
 __all__ = [
     "DealRoomEnv",
     "DealRoomEnvironment",
     "DealRoomAction",
     "DealRoomObservation",
+    "DealRoomReward",
     "DealRoomState",
 ]

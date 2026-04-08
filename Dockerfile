@@ -7,11 +7,8 @@ ENV HF_HOME=/opt/hf-home
 ENV TRANSFORMERS_CACHE=/opt/hf-home
 ENV ENABLE_WEB_INTERFACE=true
 RUN mkdir -p /opt/hf-home && python - <<'PY'
-try:
-    from sentence_transformers import SentenceTransformer
-    SentenceTransformer("sentence-transformers/paraphrase-MiniLM-L3-v2")
-except Exception as exc:
-    print(f"Model pre-cache skipped: {exc}")
+from server.semantics import DEFAULT_ANALYZER
+print(f"Semantic backend ready: {DEFAULT_ANALYZER._backend}")
 PY
 ENV PORT=7860
 EXPOSE 7860

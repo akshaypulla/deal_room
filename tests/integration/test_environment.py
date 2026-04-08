@@ -126,3 +126,37 @@ def test_feasible_close_on_final_round_scores_instead_of_timing_out(env: DealRoo
     assert done is True
     assert reward > 0.0
     assert obs.done is True
+
+
+def test_legal_review_can_close_directly_on_final_round_when_ready(env: DealRoomEnvironment):
+    env.reset(seed=42, task_id="hostile_acquisition")
+    for stakeholder_id, payload in env.state.stakeholder_private.items():
+        payload["approval"] = 0.75
+        payload["private_resistance"] = 0.30
+        payload["trust"] = 0.80
+    for constraint in env.state.hidden_constraints.values():
+        constraint["status"] = "known"
+        constraint["resolved"] = True
+    env.state.requested_artifacts = {stakeholder_id: [] for stakeholder_id in env.state.stakeholders}
+    env.state.feasibility_state = {"is_feasible": True, "violations": []}
+    env.state.active_blockers = []
+    env.state.offer_state["event_triggered"] = True
+    env.state.deal_stage = "legal_review"
+    env.state.round_number = env.state.max_rounds - 1
+    obs, reward, done, _ = env.step(
+        DealRoomAction(
+            action_type="group_proposal",
+            target="all",
+            message="All blockers are cleared and the terms are feasible; I recommend final approval now.",
+            proposed_terms={
+                "price": 180000,
+                "timeline_weeks": 14,
+                "security_commitments": ["gdpr"],
+                "support_level": "named_support_lead",
+                "liability_cap": "mutual_cap",
+            },
+        )
+    )
+    assert done is True
+    assert reward > 0.0
+    assert obs.done is True

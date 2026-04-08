@@ -449,7 +449,7 @@ class DealRoomEnvironment:
         elif self._state.deal_stage == "negotiation" and contacted_mandatory and known_constraints:
             target_stage = "legal_review"
         elif self._state.deal_stage == "legal_review" and mandatory_workable and requested_clear:
-            target_stage = "final_approval"
+            target_stage = "closed" if self._can_close(action) else "final_approval"
         elif self._state.deal_stage == "final_approval" and self._can_close(action):
             target_stage = "closed"
 

@@ -1,4 +1,4 @@
-from models import DealRoomAction, DealRoomObservation, DealRoomState
+from models import DealRoomAction, DealRoomObservation, DealRoomReward, DealRoomState
 
 
 def test_action_target_ids_are_deduplicated():
@@ -21,3 +21,10 @@ def test_observation_supports_dynamic_fields():
     )
     assert "finance" in observation.stakeholders
     assert observation.known_constraints[0]["id"] == "budget_ceiling"
+
+
+def test_reward_model_tracks_value_done_and_info():
+    reward = DealRoomReward(value=0.12, done=False, info={"milestone": "hint:budget_ceiling"})
+    assert reward.value == 0.12
+    assert reward.done is False
+    assert reward.info["milestone"] == "hint:budget_ceiling"

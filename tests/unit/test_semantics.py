@@ -21,4 +21,4 @@ def test_semantic_analyzer_returns_known_backend():
         {"documents": [], "requested_artifacts": {}},
         {"technical": "technical"},
     )
-    assert result["backend"] in {"embedding", "lexical"}
+    assert result["backend"] in {"embedding", "tfidf", "lexical"}

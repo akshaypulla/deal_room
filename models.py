@@ -62,6 +62,12 @@ class DealRoomObservation(BaseModel):
     info: Dict[str, Any] = Field(default_factory=dict)
 
 
+class DealRoomReward(BaseModel):
+    value: float = 0.0
+    done: bool = False
+    info: Dict[str, Any] = Field(default_factory=dict)
+
+
 class DealRoomState(BaseModel):
     episode_id: str = ""
     step_count: int = 0

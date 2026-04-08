@@ -1,9 +1,11 @@
 """
 Deterministic semantic analyzer for DealRoom V2.5.
 
-The preferred path uses a lightweight MiniLM embedding model. If the model or
-dependencies are unavailable, the analyzer falls back to lexical similarity so
-the environment stays functional and deterministic in constrained contexts.
+The preferred path uses a lightweight sentence-transformer when available.
+For container-friendly deployment, the default non-lexical path uses a fitted
+TF-IDF vector space so the shipped environment still gets semantic-ish vector
+matching without pulling a massive PyTorch stack. If neither path is available,
+the analyzer falls back to lexical similarity.
 """
 
 from __future__ import annotations
@@ -18,6 +20,11 @@ try:
     from sentence_transformers import SentenceTransformer  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     SentenceTransformer = None
+
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    TfidfVectorizer = None
 
 EMBED_MODEL_NAME = "sentence-transformers/paraphrase-MiniLM-L3-v2"
 
@@ -148,6 +155,7 @@ class SemanticAnalyzer:
     def __init__(self, model_name: str = EMBED_MODEL_NAME):
         self._backend = "lexical"
         self._model = None
+        self._vectorizer = None
         self._artifact_patterns = {
             artifact: re.compile("|".join(re.escape(term) for term in aliases), re.I)
             for artifact, aliases in ARTIFACT_ALIASES.items()
@@ -158,7 +166,10 @@ class SemanticAnalyzer:
                 self._backend = "embedding"
         except Exception:
             self._model = None
-            self._backend = "lexical"
+        if self._backend == "lexical" and TfidfVectorizer is not None:
+            self._vectorizer = self._build_vectorizer()
+            if self._vectorizer is not None:
+                self._backend = "tfidf"
         self._intent_vectors = {
             name: self._encode_many(examples) for name, examples in INTENT_BANK.items()
         }
@@ -173,9 +184,24 @@ class SemanticAnalyzer:
             return SentenceTransformer(model_name)
         return None
 
+    def _build_vectorizer(self):
+        if TfidfVectorizer is None:
+            return None
+        corpus: List[str] = []
+        for values in INTENT_BANK.values():
+            corpus.extend(values)
+        for values in TONE_BANK.values():
+            corpus.extend(values)
+        vectorizer = TfidfVectorizer(ngram_range=(1, 2), lowercase=True)
+        vectorizer.fit(corpus)
+        return vectorizer
+
     def _encode_many(self, texts: Iterable[str]) -> np.ndarray:
         texts = list(texts)
         if self._model is None:
+            if self._vectorizer is not None:
+                matrix = self._vectorizer.transform(texts)
+                return matrix.toarray().astype(float)
             return np.array([[0.0] for _ in texts], dtype=float)
         vectors = self._model.encode(texts)
         if isinstance(vectors, list):
@@ -196,6 +222,17 @@ class SemanticAnalyzer:
             if np.linalg.norm(query) != 0:
                 query = query / np.linalg.norm(query)
             scores = vectors @ query
+            return float(np.max(scores))
+        if self._backend == "tfidf" and self._vectorizer is not None and vectors.size:
+            query = self._vectorizer.transform([text]).toarray()[0]
+            query_norm = np.linalg.norm(query)
+            if query_norm != 0:
+                query = query / query_norm
+            normalized = []
+            for row in vectors:
+                row_norm = np.linalg.norm(row)
+                normalized.append(row if row_norm == 0 else row / row_norm)
+            scores = np.array(normalized) @ query
             return float(np.max(scores))
         return max((_lexical_score(text, exemplar) for exemplar in exemplars), default=0.0)
 

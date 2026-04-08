@@ -17,6 +17,11 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 BENCHMARK = "deal-room"
 IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME") or os.getenv("IMAGE_NAME")
+USE_LLM_MESSAGES = os.getenv("DEALROOM_ENABLE_LLM_MESSAGES", "0").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
 client = OpenAI(api_key=API_KEY or "missing", base_url=API_BASE_URL)
 
@@ -75,7 +80,11 @@ class ProtocolPolicy:
         progress = obs.approval_path_progress
         requested = obs.requested_artifacts
         known_constraints = {item["id"] for item in obs.known_constraints}
+        required_artifacts = {
+            item["required_artifact"] for item in obs.known_constraints if item.get("required_artifact")
+        }
         blockers = obs.active_blockers
+        rounds_remaining = max(0, obs.max_rounds - obs.round_number)
         mandatory_ids = [
             stakeholder_id
             for stakeholder_id, payload in progress.items()
@@ -85,6 +94,41 @@ class ProtocolPolicy:
             progress[stakeholder_id]["band"] in {"workable", "supporter"}
             for stakeholder_id in mandatory_ids
         )
+        high_priority_requested: list[tuple[str, str]] = []
+        optional_requested: list[tuple[str, str]] = []
+        for stakeholder_id, artifacts in requested.items():
+            for artifact in artifacts:
+                bucket = high_priority_requested if (
+                    stakeholder_id in mandatory_ids
+                    or stakeholder_id in blockers
+                    or artifact in required_artifacts
+                ) else optional_requested
+                bucket.append((stakeholder_id, artifact))
+
+        if (
+            known_constraints
+            and not blockers
+            and mandatory_ready
+            and not high_priority_requested
+            and obs.deal_stage in {"legal_review", "final_approval", "closed"}
+        ):
+            return action_with_message(
+                DealRoomAction(
+                    action_type="group_proposal",
+                    target="all",
+                    target_ids=list(stakeholders.keys()),
+                    proposed_terms={
+                        "price": 180000,
+                        "timeline_weeks": 14,
+                        "security_commitments": ["gdpr", "audit rights"],
+                        "support_level": "named_support_lead",
+                        "liability_cap": "mutual_cap",
+                    },
+                ),
+                obs,
+                "Attempt closure only because approval and feasibility are ready.",
+                fallback_message="I believe we have enough alignment to move to final approval on concrete, reviewable terms.",
+            )
 
         if obs.veto_precursors:
             target_id = next(iter(obs.veto_precursors))
@@ -102,39 +146,25 @@ class ProtocolPolicy:
                     f"Address the rising internal risk with {target_id} directly.",
                 )
 
-        for stakeholder_id, payload in progress.items():
-            if payload.get("mandatory") and requested.get(stakeholder_id):
-                artifact = requested[stakeholder_id][0]
-                self.sent_artifacts.add((stakeholder_id, artifact))
-                return action_with_message(
-                    DealRoomAction(
-                        action_type="send_document",
-                        target=stakeholder_id,
-                        target_ids=[stakeholder_id],
-                        documents=[{"type": artifact, "specificity": "high"}],
-                    ),
-                    obs,
-                    f"Send the requested {artifact.replace('_', ' ')} to {stakeholder_id}.",
-                    fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
-                )
+        if high_priority_requested:
+            stakeholder_id, artifact = high_priority_requested[0]
+            self.sent_artifacts.add((stakeholder_id, artifact))
+            return action_with_message(
+                DealRoomAction(
+                    action_type="send_document",
+                    target=stakeholder_id,
+                    target_ids=[stakeholder_id],
+                    documents=[{"type": artifact, "specificity": "high"}],
+                ),
+                obs,
+                f"Send the requested {artifact.replace('_', ' ')} to {stakeholder_id}.",
+                fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
+            )
 
-        for stakeholder_id, artifacts in requested.items():
-            if artifacts:
-                artifact = artifacts[0]
-                self.sent_artifacts.add((stakeholder_id, artifact))
-                return action_with_message(
-                    DealRoomAction(
-                        action_type="send_document",
-                        target=stakeholder_id,
-                        target_ids=[stakeholder_id],
-                        documents=[{"type": artifact, "specificity": "high"}],
-                    ),
-                    obs,
-                    f"Clear the remaining requested artifact for {stakeholder_id}.",
-                    fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
-                )
-
-        if not any(requested.values()) and (not known_constraints or obs.deal_stage in {"evaluation", "negotiation"}):
+        if (
+            not high_priority_requested
+            and (not known_constraints or obs.deal_stage in {"evaluation", "negotiation"})
+        ):
             probe = choose_artifact_probe(obs, self.sent_artifacts)
             if probe is not None:
                 target_id, artifact = probe
@@ -173,6 +203,31 @@ class ProtocolPolicy:
                 ),
             )
 
+        if (
+            not blockers
+            and not mandatory_ready
+            and (
+                obs.deal_stage in {"legal_review", "final_approval"}
+                or rounds_remaining <= 2
+                or not high_priority_requested
+            )
+        ):
+            target_id = choose_probe_target(obs, mandatory_only=True)
+            role = obs.stakeholders[target_id]["role"]
+            return action_with_message(
+                DealRoomAction(
+                    action_type="direct_message",
+                    target=target_id,
+                    target_ids=[target_id],
+                ),
+                obs,
+                f"Increase approval from {target_id} with a specific, credible, role-aware message before closing.",
+                fallback_message=ROLE_PROBE_MESSAGES.get(
+                    role,
+                    "I want to make sure we are solving the real internal approval concern before we ask for final sign-off.",
+                ),
+            )
+
         if not blockers and not mandatory_ready:
             target_id = choose_probe_target(obs, mandatory_only=True)
             role = obs.stakeholders[target_id]["role"]
@@ -207,23 +262,19 @@ class ProtocolPolicy:
                 ),
             )
 
-        if known_constraints and mandatory_ready and obs.deal_stage in {"legal_review", "final_approval", "closed"} and not obs.active_blockers:
+        if optional_requested and rounds_remaining > 2:
+            stakeholder_id, artifact = optional_requested[0]
+            self.sent_artifacts.add((stakeholder_id, artifact))
             return action_with_message(
                 DealRoomAction(
-                    action_type="group_proposal",
-                    target="all",
-                    target_ids=list(stakeholders.keys()),
-                    proposed_terms={
-                        "price": 180000,
-                        "timeline_weeks": 14,
-                        "security_commitments": ["gdpr", "audit rights"],
-                        "support_level": "named_support_lead",
-                        "liability_cap": "mutual_cap",
-                    },
+                    action_type="send_document",
+                    target=stakeholder_id,
+                    target_ids=[stakeholder_id],
+                    documents=[{"type": artifact, "specificity": "high"}],
                 ),
                 obs,
-                "Attempt closure only because approval and feasibility are ready.",
-                fallback_message="I believe we have enough alignment to move to final approval on concrete, reviewable terms.",
+                f"Clear the remaining requested artifact for {stakeholder_id}.",
+                fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
             )
 
         target_id = choose_probe_target(obs, mandatory_only=bool(mandatory_ids))
@@ -285,7 +336,7 @@ def action_with_message(
     fallback_message: Optional[str] = None,
 ) -> DealRoomAction:
     message = fallback_message or "I want to make this easy to evaluate and safe to approve."
-    if API_KEY:
+    if USE_LLM_MESSAGES and API_KEY:
         llm_message = maybe_generate_message(obs, action, instruction)
         if llm_message:
             message = llm_message
@@ -301,7 +352,7 @@ def maybe_generate_message(
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
-            temperature=0.1,
+            temperature=0.0,
             max_tokens=180,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
