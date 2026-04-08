@@ -1,87 +1,90 @@
 """
-CCIGrader — Contract Closure Index v3
-
-Measures sustainable, implementable consensus across 4 dimensions:
-  Consensus (40%)         — weighted satisfaction avg with weakest-link penalty
-  Implementation Risk     — multiplicative: CTO+Ops satisfaction post-signature
-  Efficiency (15%)        — pacing penalty, not raw speed
-  Execution Penalty       — malformed output penalty
-
-Weighs are STAGE-DEPENDENT. Who can block changes through the deal lifecycle.
+Deterministic terminal grader for DealRoom V2.5.
 """
+
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from models import DealRoomState
 
-STAGE_WEIGHTS = {
-    "evaluation": {
-        "CFO": 0.35,
-        "CTO": 0.30,
-        "Legal": 0.15,
-        "Procurement": 0.15,
-        "Ops": 0.05,
-    },
-    "negotiation": {
-        "CFO": 0.30,
-        "CTO": 0.25,
-        "Legal": 0.20,
-        "Procurement": 0.15,
-        "Ops": 0.10,
-    },
-    "legal_review": {
-        "CFO": 0.25,
-        "CTO": 0.15,
-        "Legal": 0.35,
-        "Procurement": 0.20,
-        "Ops": 0.05,
-    },
-    "final_approval": {
-        "CFO": 0.40,
-        "CTO": 0.15,
-        "Legal": 0.25,
-        "Procurement": 0.10,
-        "Ops": 0.10,
-    },
-}
-
 
 class CCIGrader:
-    @staticmethod
-    def compute(state: "DealRoomState") -> float:
-        """
-        Returns CCI in [0.0, 1.0].
-        Returns 0.0 if deal not closed or deal failed (veto, timeout, mass blocking).
-        """
+    WEIGHTS = {
+        "approval_completeness": 0.35,
+        "constraint_satisfaction": 0.25,
+        "term_feasibility": 0.15,
+        "relationship_durability": 0.15,
+        "efficiency": 0.10,
+    }
+
+    @classmethod
+    def compute(cls, state: "DealRoomState") -> float:
         if not state.deal_closed or state.deal_failed:
             return 0.0
+        if not state.feasibility_state.get("is_feasible", False):
+            return 0.0
 
-        stage = state.deal_stage
-        if stage not in STAGE_WEIGHTS:
-            stage = "final_approval"
-        weights = STAGE_WEIGHTS[stage]
+        mandatory_ids = [
+            stakeholder_id
+            for stakeholder_id, payload in state.stakeholder_private.items()
+            if payload.get("mandatory")
+        ]
+        for stakeholder_id in mandatory_ids:
+            private = state.stakeholder_private[stakeholder_id]
+            if private["approval"] < 0.62 or private["private_resistance"] > 0.65:
+                return 0.0
+        for stakeholder_id, private in state.stakeholder_private.items():
+            if private.get("veto_power") and private["private_resistance"] > 0.65:
+                return 0.0
 
-        total_w = sum(weights.values())
-        assert abs(total_w - 1.0) < 0.01, f"Weights sum to {total_w}, must be 1.0"
+        approval_score = cls._approval_completeness(state, mandatory_ids)
+        constraint_score = cls._constraint_satisfaction(state)
+        feasibility_score = cls._term_feasibility(state)
+        relationship_score = cls._relationship_durability(state)
+        efficiency_score = cls._efficiency(state)
 
-        sat = {k: state.satisfaction.get(k, 0.5) for k in weights}
-        min_sat = min(sat.values())
-
-        weighted_avg = sum(sat[k] * weights[k] for k in weights)
-
-        weakest_link = 0.6 + 0.4 * min(1.0, min_sat / 0.35)
-        consensus = max(0.0, min(1.0, weighted_avg * weakest_link))
-
-        sat_cto = sat.get("CTO", 0.5)
-        sat_ops = sat.get("Ops", 0.5)
-        impl_risk = max(0.5, 1.0 - (0.45 * (1.0 - sat_cto) + 0.35 * (1.0 - sat_ops)))
-
-        efficiency = max(
-            0.1, 1.0 - ((state.round_number / state.max_rounds) ** 1.3) * 0.4
+        score = (
+            approval_score * cls.WEIGHTS["approval_completeness"]
+            + constraint_score * cls.WEIGHTS["constraint_satisfaction"]
+            + feasibility_score * cls.WEIGHTS["term_feasibility"]
+            + relationship_score * cls.WEIGHTS["relationship_durability"]
+            + efficiency_score * cls.WEIGHTS["efficiency"]
         )
+        return round(max(0.0, min(1.0, score)), 4)
 
-        exec_penalty = min(0.20, state.validation_failures * 0.04)
+    @staticmethod
+    def _approval_completeness(state: "DealRoomState", mandatory_ids) -> float:
+        if not mandatory_ids:
+            return 1.0
+        approvals = [state.stakeholder_private[item]["approval"] for item in mandatory_ids]
+        return min(1.0, sum(approvals) / len(approvals))
 
-        raw = (consensus * impl_risk * efficiency) - exec_penalty
-        return round(max(0.0, min(1.0, raw)), 4)
+    @staticmethod
+    def _constraint_satisfaction(state: "DealRoomState") -> float:
+        constraints = list(state.hidden_constraints.values())
+        if not constraints:
+            return 1.0
+        resolved = sum(1 for item in constraints if item.get("resolved"))
+        return resolved / len(constraints)
+
+    @staticmethod
+    def _term_feasibility(state: "DealRoomState") -> float:
+        penalty = min(0.20, 0.05 * len(state.feasibility_state.get("violations", [])))
+        return max(0.0, 1.0 - penalty)
+
+    @staticmethod
+    def _relationship_durability(state: "DealRoomState") -> float:
+        trusts = [payload["trust"] for payload in state.stakeholder_private.values()]
+        mark_penalty = 0.0
+        for payload in state.stakeholder_private.values():
+            mark_penalty += 0.03 * len(payload.get("permanent_marks", []))
+        average = sum(trusts) / len(trusts) if trusts else 0.0
+        return max(0.0, min(1.0, average - mark_penalty))
+
+    @staticmethod
+    def _efficiency(state: "DealRoomState") -> float:
+        if state.max_rounds <= 0:
+            return 0.0
+        return max(0.1, 1.0 - ((state.round_number / state.max_rounds) ** 1.25) * 0.45)

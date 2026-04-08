@@ -1,95 +1,87 @@
 """
-ClaimsTracker — Regex-only numerical contradiction detection.
+Commitment ledger for DealRoom V2.5.
 
-DESIGN DECISION (Issue 1):
-Target expansion is done by the CALLER (environment), not here.
-This function receives a single stakeholder ID string only.
-Calling expand_targets() here was redundant and violated single responsibility.
+The ledger keeps a small rolling history of semantic commitments and detects
+contradictions across numeric and qualitative slots.
 """
 
-import re
+from __future__ import annotations
+
+from copy import deepcopy
 from typing import Dict, List
 
-CLAIM_PATTERNS = {
-    "implementation_weeks": (
-        r"(?i)(?:go.?live|deploy|implementation|deliver|complete)"
-        r"(?:\s+(?:in|within|takes?|will\s+take))?\s+(\d+)\s*(?:weeks?|wk)"
-    ),
-    "team_size": (
-        r"(?i)(?:team|resources?)\s+of\s+(\d+)"
-        r"|(\d+)\s*(?:dedicated\s+)?(?:engineers?|members?)"
-    ),
-    "price_commit": r"(?i)\$\s*(\d{1,3}(?:,\d{3})*|\d{4,})",
+from server.scenarios import expand_targets
+
+NUMERIC_TOLERANCES = {
+    "price": 0.08,
+    "timeline_weeks": 0.15,
 }
 
-DEVIATION_TOLERANCE = 0.15
-
-VALID_SUBGROUPS: Dict[str, List[str]] = {
-    "cto_cfo": ["CTO", "CFO"],
-    "legal_procurement": ["Legal", "Procurement"],
+POLARITY_SLOTS = {
+    "security_posture",
+    "liability",
+    "support_level",
+    "implementation_commitment",
 }
 
-ALL_STAKEHOLDER_IDS = ["CFO", "CTO", "Legal", "Procurement", "Ops"]
 
-
-def expand_targets(target: str) -> List[str]:
-    """
-    Expand target string to list of individual stakeholder IDs.
-
-    Uses explicit subgroup registry — never splits on underscore.
-    Splitting on underscore would break stakeholder names containing underscores
-    and would produce lowercase IDs that don't match the dict keys.
-
-    Returns empty list for unknown targets — caller decides how to handle.
-    """
-    t = target.lower().strip()
-    if t == "all":
-        return list(ALL_STAKEHOLDER_IDS)
-    if t in VALID_SUBGROUPS:
-        return VALID_SUBGROUPS[t]
-    for sid in ALL_STAKEHOLDER_IDS:
-        if sid.lower() == t:
-            return [sid]
-    return []
-
-
-class ClaimsTracker:
-    """
-    Tracks numerical commitments per stakeholder.
-    Returns True when a new value deviates >15% from the prior commitment.
-
-    Receives individual stakeholder IDs only.
-    Target expansion is done by the environment before calling this.
-    """
-
-    def __init__(self):
-        self.claims: Dict[str, List[float]] = {}
+class CommitmentLedger:
+    def __init__(self, max_claims: int = 12):
+        self.max_claims = max_claims
+        self.claims: List[Dict[str, object]] = []
 
     def reset(self):
-        self.claims = {}
+        self.claims = []
 
-    def extract_and_track(self, target: str, message: str) -> bool:
-        """
-        target: single stakeholder ID (e.g. "CFO"), already expanded by caller.
-        Returns True if a contradiction is detected.
-        """
-        if not message or not target:
-            return False
+    def ingest(
+        self,
+        stakeholder_ids: List[str],
+        claim_candidates: List[Dict[str, object]],
+        threshold_jitter: Dict[str, float],
+    ) -> Dict[str, List[Dict[str, object]]]:
+        contradictions: List[Dict[str, object]] = []
+        recorded: List[Dict[str, object]] = []
+        for stakeholder_id in stakeholder_ids:
+            for claim in claim_candidates:
+                entry = deepcopy(claim)
+                entry["stakeholder_id"] = stakeholder_id
+                entry["slot_threshold"] = round(
+                    0.78 + float(threshold_jitter.get(str(claim["slot"]), 0.0)), 4
+                )
+                prior = self._latest_for(stakeholder_id, str(claim["slot"]))
+                if prior and self._is_contradiction(prior, entry):
+                    contradictions.append(
+                        {
+                            "stakeholder_id": stakeholder_id,
+                            "slot": entry["slot"],
+                            "previous": prior,
+                            "current": entry,
+                        }
+                    )
+                self.claims.append(entry)
+                recorded.append(entry)
+        if len(self.claims) > self.max_claims:
+            self.claims = self.claims[-self.max_claims :]
+        return {"contradictions": contradictions, "recorded": recorded}
 
-        triggered = False
-        for claim_type, pattern in CLAIM_PATTERNS.items():
-            match = re.search(pattern, message)
-            if not match:
-                continue
-            raw_val = next((g for g in match.groups() if g is not None), None)
-            if raw_val is None:
-                continue
-            val = float(raw_val.replace(",", ""))
-            key = f"{target}:{claim_type}"
-            if key in self.claims and self.claims[key]:
-                last = self.claims[key][-1]
-                if last > 0 and abs(val - last) / last > DEVIATION_TOLERANCE:
-                    triggered = True
-            self.claims.setdefault(key, []).append(val)
+    def _latest_for(self, stakeholder_id: str, slot: str) -> Dict[str, object] | None:
+        for item in reversed(self.claims):
+            if item["stakeholder_id"] == stakeholder_id and item["slot"] == slot:
+                return item
+        return None
 
-        return triggered
+    def _is_contradiction(
+        self,
+        prior: Dict[str, object],
+        current: Dict[str, object],
+    ) -> bool:
+        slot = str(current["slot"])
+        if slot in NUMERIC_TOLERANCES:
+            previous_value = float(prior["value"])
+            current_value = float(current["value"])
+            if previous_value == 0:
+                return False
+            return abs(previous_value - current_value) / previous_value > NUMERIC_TOLERANCES[slot]
+        if slot in POLARITY_SLOTS:
+            return prior.get("value") != current.get("value") or prior.get("polarity") != current.get("polarity")
+        return False

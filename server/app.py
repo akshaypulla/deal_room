@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from models import DealRoomAction, DealRoomObservation
+from models import DealRoomAction
 from server.deal_room_environment import DealRoomEnvironment
 
 app = FastAPI(title="DealRoom", version="1.0.0")
@@ -48,7 +48,7 @@ async def metadata():
 async def reset(req: ResetRequest = ResetRequest()):
     try:
         obs = _env.reset(seed=req.seed, task_id=req.task_id, episode_id=req.episode_id)
-        return obs.dict()
+        return obs.model_dump()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -59,7 +59,12 @@ async def reset(req: ResetRequest = ResetRequest()):
 async def step(action: DealRoomAction):
     try:
         obs, reward, done, info = _env.step(action)
-        return {"observation": obs.dict(), "reward": reward, "done": done, "info": info}
+        return {
+            "observation": obs.model_dump(),
+            "reward": reward,
+            "done": done,
+            "info": info,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Step failed: {e}")
 
@@ -67,7 +72,7 @@ async def step(action: DealRoomAction):
 @app.get("/state")
 async def state():
     try:
-        return _env.state.dict()
+        return _env.state.model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"State failed: {e}")
 

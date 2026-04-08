@@ -6,10 +6,12 @@
 
 """Deal Room Environment."""
 
-from server.deal_room_environment import DealRoomEnvironment
-from models import DealRoomAction, DealRoomObservation, DealRoomState
+from .client import DealRoomEnv
+from .server.deal_room_environment import DealRoomEnvironment
+from .models import DealRoomAction, DealRoomObservation, DealRoomState
 
 __all__ = [
+    "DealRoomEnv",
     "DealRoomEnvironment",
     "DealRoomAction",
     "DealRoomObservation",

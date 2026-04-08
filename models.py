@@ -1,40 +1,57 @@
 """
-DealRoom Pydantic Models
-Flat dicts throughout — no nested model classes.
-beliefs uses Dict[str, Dict[str, float]] validated to always contain
-exactly {competence, risk_tolerance, pricing_rigor} per stakeholder.
+DealRoom V2.5 Pydantic models.
+
+The environment stays OpenEnv-compatible while exposing a richer dynamic roster,
+hidden constraints, and partial observability.
 """
 
-from pydantic import BaseModel, Field, field_validator
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DealRoomAction(BaseModel):
     action_type: str = "direct_message"
-    # direct_message | group_proposal | backchannel | send_document |
-    # concession | walkaway_signal | reframe_value_prop | exec_escalation
     target: str = "all"
-    # CFO | CTO | Legal | Procurement | Ops | all | cto_cfo | legal_procurement
+    target_ids: List[str] = Field(default_factory=list)
     message: str = ""
     documents: List[Dict[str, str]] = Field(default_factory=list)
-    # [{"type": "roi_model", "specificity": "high|med|low"}]
     proposed_terms: Optional[Dict[str, Any]] = None
-    channel: str = "formal"  # formal | backchannel
-    mode: str = "async_email"  # async_email | formal_meeting | exec_escalation
+    channel: str = "formal"
+    mode: str = "async_email"
+
+    @field_validator("message")
+    @classmethod
+    def truncate_message(cls, value: str) -> str:
+        return value[:1200]
+
+    @field_validator("target_ids")
+    @classmethod
+    def normalize_target_ids(cls, value: List[str]) -> List[str]:
+        normalized = [item.strip() for item in value if item and item.strip()]
+        return list(dict.fromkeys(normalized))
+
+    @model_validator(mode="after")
+    def sync_targets(self) -> "DealRoomAction":
+        if self.target_ids and self.target == "all":
+            self.target = ",".join(self.target_ids)
+        return self
 
 
 class DealRoomObservation(BaseModel):
     round_number: int = 0
     max_rounds: int = 10
+    stakeholders: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
     stakeholder_messages: Dict[str, str] = Field(default_factory=dict)
     engagement_level: Dict[str, float] = Field(default_factory=dict)
-    # Noisy 1-step delayed proxy for satisfaction. Never exact.
-    deal_momentum: str = "stalling"  # stalling | progressing | critical
+    weak_signals: Dict[str, List[str]] = Field(default_factory=dict)
+    known_constraints: List[Dict[str, Any]] = Field(default_factory=list)
+    requested_artifacts: Dict[str, List[str]] = Field(default_factory=dict)
+    approval_path_progress: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    deal_momentum: str = "stalling"
     deal_stage: str = "evaluation"
-    # evaluation | negotiation | legal_review | final_approval | closed
     competitor_events: List[str] = Field(default_factory=list)
     veto_precursors: Dict[str, str] = Field(default_factory=dict)
-    # Ambiguous early warning: stakeholder_id -> hint string
     scenario_hint: Optional[str] = None
     active_blockers: List[str] = Field(default_factory=list)
     days_to_deadline: int = 30
@@ -48,44 +65,45 @@ class DealRoomState(BaseModel):
     round_number: int = 0
     max_rounds: int = 10
 
-    # Flat dict beliefs: {"CFO": {"competence": 0.5, "risk_tolerance": 0.5, "pricing_rigor": 0.5}}
-    # No nested Pydantic model — plain dict validated by field_validator below
-    beliefs: Dict[str, Dict[str, float]] = Field(default_factory=dict)
-    satisfaction: Dict[str, float] = Field(default_factory=dict)
-    trust_floors: Dict[str, float] = Field(default_factory=dict)
-    permanent_marks: Dict[str, List[str]] = Field(default_factory=dict)
+    stakeholders: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    stakeholder_private: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    hidden_constraints: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    relationship_edges: List[Dict[str, Any]] = Field(default_factory=list)
+    commitment_ledger: List[Dict[str, Any]] = Field(default_factory=list)
+    deferred_effects: List[Dict[str, Any]] = Field(default_factory=list)
+    offer_state: Dict[str, Any] = Field(default_factory=dict)
+    feasibility_state: Dict[str, Any] = Field(default_factory=dict)
 
-    # Veto tracking
-    veto_risk: Dict[str, float] = Field(default_factory=dict)
-    veto_precursors_fired: Dict[str, bool] = Field(default_factory=dict)
-
-    # Stage tracking
-    deal_stage: str = "evaluation"
     active_blockers: List[str] = Field(default_factory=list)
+    deal_stage: str = "evaluation"
     stage_regressions: int = 0
-
-    # Claims and contact tracking
-    tracked_claims: Dict[str, List[float]] = Field(default_factory=dict)
     rounds_since_last_contact: Dict[str, int] = Field(default_factory=dict)
+    approval_caps: Dict[str, float] = Field(default_factory=dict)
+    semantic_threshold_jitter: Dict[str, float] = Field(default_factory=dict)
+    weak_signal_history: Dict[str, List[str]] = Field(default_factory=dict)
+    requested_artifacts: Dict[str, List[str]] = Field(default_factory=dict)
+    discovered_constraints: List[str] = Field(default_factory=list)
+    milestone_flags: Dict[str, bool] = Field(default_factory=dict)
+    external_events: List[str] = Field(default_factory=list)
 
-    # Execution quality
     validation_failures: int = 0
-    fallback_streak: int = 0
-    scrutiny_mode: bool = False
-    exec_escalation_used: bool = False
+    malformed_actions: int = 0
+    last_action_error: Optional[str] = None
 
-    # Terminal state
     deal_closed: bool = False
     deal_failed: bool = False
     failure_reason: str = ""
-    final_terms: Optional[Dict] = None
+    final_terms: Optional[Dict[str, Any]] = None
 
-    @field_validator("beliefs")
+    @field_validator("stakeholder_private")
     @classmethod
-    def validate_belief_dims(cls, v: Dict) -> Dict:
-        required = {"competence", "risk_tolerance", "pricing_rigor"}
-        for stakeholder, dims in v.items():
-            missing = required - set(dims.keys())
+    def validate_tracks(cls, value: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        required = {"trust", "approval", "perceived_fit", "private_resistance"}
+        for stakeholder_id, payload in value.items():
+            missing = required - set(payload.keys())
             if missing:
-                raise ValueError(f"{stakeholder} missing belief dims: {missing}")
-        return v
+                raise ValueError(f"{stakeholder_id} missing tracks: {sorted(missing)}")
+        return value
+
+    def __call__(self) -> "DealRoomState":
+        return self

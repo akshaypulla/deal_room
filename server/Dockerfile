@@ -67,9 +67,19 @@ COPY --from=builder /app/env /app/env
 
 # Set PATH to use the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
+ENV HF_HOME=/opt/hf-home
+ENV TRANSFORMERS_CACHE=/opt/hf-home
 
 # Set PYTHONPATH so imports work correctly
 ENV PYTHONPATH="/app/env:$PYTHONPATH"
+
+RUN mkdir -p /opt/hf-home && python - <<'PY'
+try:
+    from sentence_transformers import SentenceTransformer
+    SentenceTransformer("sentence-transformers/paraphrase-MiniLM-L3-v2")
+except Exception as exc:
+    print(f"Model pre-cache skipped: {exc}")
+PY
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

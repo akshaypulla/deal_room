@@ -1,8 +1,8 @@
 ---
 title: Deal Room Environment Server
-emoji: 🏒
+emoji: 🏢
 colorFrom: yellow
-colorTo: yellow
+colorTo: blue
 sdk: docker
 pinned: false
 app_port: 8000
@@ -11,245 +11,120 @@ tags:
   - openenv
 ---
 
-# Deal Room Environment
+# Deal Room
 
-A simple test environment that echoes back messages. Perfect for testing the env APIs as well as demonstrating environment usage patterns.
+Deal Room is an OpenEnv environment for enterprise software negotiation. The agent acts as a vendor-side negotiator trying to close a realistic B2B deal against a dynamic internal buying committee with hidden constraints, approval chains, and irreversible trust damage.
 
-## Quick Start
+This V2.5 environment is built to be useful for RL and agent evaluation, not just scripted prompting. Each episode generates a seeded scenario with `2-4` stakeholders, `1-2` hidden hard constraints, up to `2` internal relationship edges, dense milestone rewards, and a deterministic terminal grader.
 
-The simplest way to use the Deal Room environment is through the `DealRoomEnv` class:
+## Why this is different
 
-```python
-from deal_room import DealRoomAction, DealRoomEnv
+- Stakeholders are dynamic, not fixed. A deal may include finance, technical, legal/compliance, procurement, operations, or an executive sponsor.
+- Constraints are partially observable. Budget, compliance, delivery, and process blockers appear through weak signals before they become fully known.
+- Language matters. The environment uses a lightweight local semantic layer to score paraphrase-sensitive request matching, contradiction, and role-aware tone.
+- Closing early is punished. Deals only close when terms are feasible and all mandatory approvers are workable.
 
-try:
-    # Create environment from Docker image
-    deal_roomenv = DealRoomEnv.from_docker_image("deal_room-env:latest")
+## Tasks
 
-    # Reset
-    result = deal_roomenv.reset()
-    print(f"Reset: {result.observation.echoed_message}")
+- `aligned`: easier deal, `2-3` stakeholders, one hidden constraint, high observability.
+- `conflicted`: medium difficulty, `3-4` stakeholders, one coalition edge, medium ambiguity.
+- `hostile_acquisition`: hardest deal, `4` stakeholders, authority shift, two hidden constraints, low tolerance for inconsistency.
 
-    # Send multiple messages
-    messages = ["Hello, World!", "Testing echo", "Final message"]
+All tasks return rewards in `[0.0, 1.0]`. Intermediate steps use bounded dense reward and successful terminal close returns the deterministic grader score.
 
-    for msg in messages:
-        result = deal_roomenv.step(DealRoomAction(message=msg))
-        print(f"Sent: '{msg}'")
-        print(f"  → Echoed: '{result.observation.echoed_message}'")
-        print(f"  → Length: {result.observation.message_length}")
-        print(f"  → Reward: {result.reward}")
+## Action Space
 
-finally:
-    # Always clean up
-    deal_roomenv.close()
-```
+`DealRoomAction`
 
-That's it! The `DealRoomEnv.from_docker_image()` method handles:
-- Starting the Docker container
-- Waiting for the server to be ready
-- Connecting to the environment
-- Container cleanup when you call `close()`
+- `action_type`: `direct_message | group_proposal | backchannel | send_document | concession | walkaway_signal | reframe_value_prop | exec_escalation`
+- `target`: compatibility alias such as `all`, `finance`, `technical`, `legal_compliance`, or legacy aliases like `CFO`
+- `target_ids`: explicit dynamic stakeholder IDs for the active episode
+- `message`: natural-language negotiation move
+- `documents`: optional artifacts such as `roi_model`, `implementation_timeline`, `security_cert`, `dpa`, `vendor_packet`, `reference_case`, `support_plan`
+- `proposed_terms`: optional structured offer with keys `price`, `timeline_weeks`, `security_commitments`, `support_level`, `liability_cap`
+- `channel`, `mode`: communication metadata
 
-## Building the Docker Image
+## Observation Space
 
-Before using the environment, you need to build the Docker image:
+`DealRoomObservation`
+
+- `stakeholders`: active roster with display name, role, authority, and mandatory status
+- `stakeholder_messages`: current visible stakeholder replies
+- `engagement_level`: noisy proxy for approval
+- `weak_signals`: ambiguous hints about internal blockers
+- `known_constraints`: constraints that have been fully uncovered
+- `requested_artifacts`: still-missing artifacts by stakeholder
+- `approval_path_progress`: approval band and authority for each stakeholder
+- `deal_stage`: `evaluation -> negotiation -> legal_review -> final_approval -> closed`
+- `active_blockers`, `veto_precursors`, `scenario_hint`, `competitor_events`, `days_to_deadline`
+
+## Reward Model
+
+- Dense milestone reward per step, capped at `0.15`
+- Milestones include discovering hidden constraints, satisfying requested artifacts, moving mandatory approvers up a band, removing blockers, and legitimate stage advances
+- Bad actions do not create large negative reward, but they apply permanent marks and feasibility damage that reduce future returns and the final score
+- Terminal score uses approval completeness, constraint satisfaction, term feasibility, relationship durability, and efficiency
+
+## Local Setup
 
 ```bash
-# From project root
-docker build -t deal_room-env:latest -f server/Dockerfile .
+pip install -r requirements.txt
+pytest -q
+openenv validate
+uvicorn server.app:app --reload --port 8000
 ```
 
-## Deploying to Hugging Face Spaces
-
-You can easily deploy your OpenEnv environment to Hugging Face Spaces using the `openenv push` command:
+## Docker
 
 ```bash
-# From the environment directory (where openenv.yaml is located)
+docker build -t deal-room-env:latest -f Dockerfile .
+docker run --rm -p 7860:7860 deal-room-env:latest
+```
+
+The Docker image preloads the lightweight MiniLM semantic model into a stable Hugging Face cache directory. If model download is unavailable, the environment falls back to deterministic lexical similarity so the server still starts cleanly.
+
+## Hugging Face Spaces
+
+```bash
 openenv push
-
-# Or specify options
-openenv push --namespace my-org --private
 ```
 
-The `openenv push` command will:
-1. Validate that the directory is an OpenEnv environment (checks for `openenv.yaml`)
-2. Prepare a custom build for Hugging Face Docker space (enables web interface)
-3. Upload to Hugging Face (ensuring you're logged in)
+Expected endpoints:
 
-### Prerequisites
+- `/health`
+- `/metadata`
+- `/reset`
+- `/step`
+- `/state`
 
-- Authenticate with Hugging Face: The command will prompt for login if not already authenticated
+## Baseline
 
-### Options
-
-- `--directory`, `-d`: Directory containing the OpenEnv environment (defaults to current directory)
-- `--repo-id`, `-r`: Repository ID in format 'username/repo-name' (defaults to 'username/env-name' from openenv.yaml)
-- `--base-image`, `-b`: Base Docker image to use (overrides Dockerfile FROM)
-- `--private`: Deploy the space as private (default: public)
-
-### Examples
+`inference.py` runs a seeded protocol baseline across all three tasks and prints the required structured logs:
 
 ```bash
-# Push to your personal namespace (defaults to username/env-name from openenv.yaml)
-openenv push
-
-# Push to a specific repository
-openenv push --repo-id my-org/my-env
-
-# Push with a custom base image
-openenv push --base-image ghcr.io/meta-pytorch/openenv-base:latest
-
-# Push as a private space
-openenv push --private
-
-# Combine options
-openenv push --repo-id my-org/my-env --base-image custom-base:latest --private
+python inference.py
 ```
 
-After deployment, your space will be available at:
-`https://huggingface.co/spaces/<repo-id>`
+Credential resolution order:
 
-The deployed space includes:
-- **Web Interface** at `/web` - Interactive UI for exploring the environment
-- **API Documentation** at `/docs` - Full OpenAPI/Swagger interface
-- **Health Check** at `/health` - Container health monitoring
-- **WebSocket** at `/ws` - Persistent session endpoint for low-latency interactions
+- `HF_TOKEN`
+- `OPENAI_API_KEY`
+- `API_KEY`
 
-## Environment Details
+Current local heuristic smoke run with `seed=42`:
 
-### Action
-**DealRoomAction**: Contains a single field
-- `message` (str) - The message to echo back
+- `aligned`: `0.85`
+- `conflicted`: `0.00`
+- `hostile_acquisition`: `0.79`
 
-### Observation
-**DealRoomObservation**: Contains the echo response and metadata
-- `echoed_message` (str) - The message echoed back
-- `message_length` (int) - Length of the message
-- `reward` (float) - Reward based on message length (length × 0.1)
-- `done` (bool) - Always False for echo environment
-- `metadata` (dict) - Additional info like step count
+These are the starting reproducible scores before any additional policy calibration.
 
-### Reward
-The reward is calculated as: `message_length × 0.1`
-- "Hi" → reward: 0.2
-- "Hello, World!" → reward: 1.3
-- Empty message → reward: 0.0
+## Project Layout
 
-## Advanced Usage
-
-### Connecting to an Existing Server
-
-If you already have a Deal Room environment server running, you can connect directly:
-
-```python
-from deal_room import DealRoomEnv
-
-# Connect to existing server
-deal_roomenv = DealRoomEnv(base_url="<ENV_HTTP_URL_HERE>")
-
-# Use as normal
-result = deal_roomenv.reset()
-result = deal_roomenv.step(DealRoomAction(message="Hello!"))
-```
-
-Note: When connecting to an existing server, `deal_roomenv.close()` will NOT stop the server.
-
-### Using the Context Manager
-
-The client supports context manager usage for automatic connection management:
-
-```python
-from deal_room import DealRoomAction, DealRoomEnv
-
-# Connect with context manager (auto-connects and closes)
-with DealRoomEnv(base_url="http://localhost:8000") as env:
-    result = env.reset()
-    print(f"Reset: {result.observation.echoed_message}")
-    # Multiple steps with low latency
-    for msg in ["Hello", "World", "!"]:
-        result = env.step(DealRoomAction(message=msg))
-        print(f"Echoed: {result.observation.echoed_message}")
-```
-
-The client uses WebSocket connections for:
-- **Lower latency**: No HTTP connection overhead per request
-- **Persistent session**: Server maintains your environment state
-- **Efficient for episodes**: Better for many sequential steps
-
-### Concurrent WebSocket Sessions
-
-The server supports multiple concurrent WebSocket connections. To enable this,
-modify `server/app.py` to use factory mode:
-
-```python
-# In server/app.py - use factory mode for concurrent sessions
-app = create_app(
-    DealRoomEnvironment,  # Pass class, not instance
-    DealRoomAction,
-    DealRoomObservation,
-    max_concurrent_envs=4,  # Allow 4 concurrent sessions
-)
-```
-
-Then multiple clients can connect simultaneously:
-
-```python
-from deal_room import DealRoomAction, DealRoomEnv
-from concurrent.futures import ThreadPoolExecutor
-
-def run_episode(client_id: int):
-    with DealRoomEnv(base_url="http://localhost:8000") as env:
-        result = env.reset()
-        for i in range(10):
-            result = env.step(DealRoomAction(message=f"Client {client_id}, step {i}"))
-        return client_id, result.observation.message_length
-
-# Run 4 episodes concurrently
-with ThreadPoolExecutor(max_workers=4) as executor:
-    results = list(executor.map(run_episode, range(4)))
-```
-
-## Development & Testing
-
-### Direct Environment Testing
-
-Test the environment logic directly without starting the HTTP server:
-
-```bash
-# From the server directory
-python3 server/deal_room_environment.py
-```
-
-This verifies that:
-- Environment resets correctly
-- Step executes actions properly
-- State tracking works
-- Rewards are calculated correctly
-
-### Running Locally
-
-Run the server locally for development:
-
-```bash
-uvicorn server.app:app --reload
-```
-
-## Project Structure
-
-```
-deal_room/
-├── .dockerignore         # Docker build exclusions
-├── __init__.py            # Module exports
-├── README.md              # This file
-├── openenv.yaml           # OpenEnv manifest
-├── pyproject.toml         # Project metadata and dependencies
-├── uv.lock                # Locked dependencies (generated)
-├── client.py              # DealRoomEnv client
-├── models.py              # Action and Observation models
-└── server/
-    ├── __init__.py        # Server module exports
-    ├── deal_room_environment.py  # Core environment logic
-    ├── app.py             # FastAPI application (HTTP + WebSocket endpoints)
-    └── Dockerfile         # Container image definition
-```
+- [models.py](/Users/akshaypulla/Documents/deal_room/models.py)
+- [server/deal_room_environment.py](/Users/akshaypulla/Documents/deal_room/server/deal_room_environment.py)
+- [server/scenarios.py](/Users/akshaypulla/Documents/deal_room/server/scenarios.py)
+- [server/stakeholders.py](/Users/akshaypulla/Documents/deal_room/server/stakeholders.py)
+- [server/semantics.py](/Users/akshaypulla/Documents/deal_room/server/semantics.py)
+- [server/grader.py](/Users/akshaypulla/Documents/deal_room/server/grader.py)
+- [inference.py](/Users/akshaypulla/Documents/deal_room/inference.py)

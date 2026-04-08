@@ -28,7 +28,7 @@ tasks:
 reward_range: [0.0, 1.0]
 observation_space:
   type: object
-  description: "Delayed noisy engagement signals, qualitative deal momentum, stakeholder messages, veto precursors"
+  description: "Dynamic stakeholder roster, weak signals, discovered constraints, noisy approval proxies, and deal-stage progress"
 action_space:
   type: object
-  description: "8 action types targeting specific stakeholders with optional documents and natural language"
+  description: "8 action types with dynamic target_ids, optional artifacts, structured offer terms, and natural-language negotiation moves"

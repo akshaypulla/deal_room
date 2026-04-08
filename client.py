@@ -1,10 +1,4 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
-"""Deal Room Environment Client."""
+"""Deal Room Environment client."""
 
 from typing import Dict
 
@@ -15,85 +9,20 @@ from openenv.core.env_server.types import State
 from .models import DealRoomAction, DealRoomObservation
 
 
-class DealRoomEnv(
-    EnvClient[DealRoomAction, DealRoomObservation, State]
-):
-    """
-    Client for the Deal Room Environment.
-
-    This client maintains a persistent WebSocket connection to the environment server,
-    enabling efficient multi-step interactions with lower latency.
-    Each client instance has its own dedicated environment session on the server.
-
-    Example:
-        >>> # Connect to a running server
-        >>> with DealRoomEnv(base_url="http://localhost:8000") as client:
-        ...     result = client.reset()
-        ...     print(result.observation.echoed_message)
-        ...
-        ...     result = client.step(DealRoomAction(message="Hello!"))
-        ...     print(result.observation.echoed_message)
-
-    Example with Docker:
-        >>> # Automatically start container and connect
-        >>> client = DealRoomEnv.from_docker_image("deal_room-env:latest")
-        >>> try:
-        ...     result = client.reset()
-        ...     result = client.step(DealRoomAction(message="Test"))
-        ... finally:
-        ...     client.close()
-    """
-
+class DealRoomEnv(EnvClient[DealRoomAction, DealRoomObservation, State]):
     def _step_payload(self, action: DealRoomAction) -> Dict:
-        """
-        Convert DealRoomAction to JSON payload for step message.
-
-        Args:
-            action: DealRoomAction instance
-
-        Returns:
-            Dictionary representation suitable for JSON encoding
-        """
-        return {
-            "message": action.message,
-        }
+        return action.model_dump()
 
     def _parse_result(self, payload: Dict) -> StepResult[DealRoomObservation]:
-        """
-        Parse server response into StepResult[DealRoomObservation].
-
-        Args:
-            payload: JSON response data from server
-
-        Returns:
-            StepResult with DealRoomObservation
-        """
-        obs_data = payload.get("observation", {})
-        observation = DealRoomObservation(
-            echoed_message=obs_data.get("echoed_message", ""),
-            message_length=obs_data.get("message_length", 0),
-            done=payload.get("done", False),
-            reward=payload.get("reward"),
-            metadata=obs_data.get("metadata", {}),
-        )
-
+        observation = DealRoomObservation(**payload.get("observation", {}))
         return StepResult(
             observation=observation,
-            reward=payload.get("reward"),
+            reward=payload.get("reward", 0.0),
             done=payload.get("done", False),
         )
 
     def _parse_state(self, payload: Dict) -> State:
-        """
-        Parse server response into State object.
-
-        Args:
-            payload: JSON response from state request
-
-        Returns:
-            State object with episode_id and step_count
-        """
         return State(
             episode_id=payload.get("episode_id"),
-            step_count=payload.get("step_count", 0),
+            step_count=payload.get("round_number", 0),
         )
