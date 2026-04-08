@@ -12,6 +12,7 @@ from openai import OpenAI
 
 from models import DealRoomAction, DealRoomObservation
 from server.deal_room_environment import DealRoomEnvironment
+from server.grader import CCIGrader
 
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 BENCHMARK = "deal-room"
@@ -410,7 +411,7 @@ def maybe_generate_message(
 def run_task(task_id: str, seed: int = 42) -> Dict[str, object]:
     env = DealRoomEnvironment()
     rewards: List[float] = []
-    final_score = 0.0
+    final_score = CCIGrader.MIN_SCORE
     success = False
     step_num = 0
     print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}")

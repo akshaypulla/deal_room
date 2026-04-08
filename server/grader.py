@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 
 class CCIGrader:
+    MIN_SCORE = 0.01
+    MAX_SCORE = 0.99
+
     WEIGHTS = {
         "approval_completeness": 0.35,
         "constraint_satisfaction": 0.25,
@@ -22,11 +25,11 @@ class CCIGrader:
     @classmethod
     def compute(cls, state: "DealRoomState") -> float:
         if not state.deal_closed or state.deal_failed:
-            return 0.0
+            return cls.MIN_SCORE
         if not state.feasibility_state.get("is_feasible", False):
-            return 0.0
+            return cls.MIN_SCORE
         if any(not constraint.get("resolved") for constraint in state.hidden_constraints.values()):
-            return 0.0
+            return cls.MIN_SCORE
 
         mandatory_ids = [
             stakeholder_id
@@ -36,10 +39,10 @@ class CCIGrader:
         for stakeholder_id in mandatory_ids:
             private = state.stakeholder_private[stakeholder_id]
             if private["approval"] < 0.62 or private["private_resistance"] > 0.65:
-                return 0.0
+                return cls.MIN_SCORE
         for stakeholder_id, private in state.stakeholder_private.items():
             if private.get("veto_power") and private["private_resistance"] > 0.65:
-                return 0.0
+                return cls.MIN_SCORE
 
         approval_score = cls._approval_completeness(state, mandatory_ids)
         constraint_score = cls._constraint_satisfaction(state)
@@ -54,7 +57,7 @@ class CCIGrader:
             + relationship_score * cls.WEIGHTS["relationship_durability"]
             + efficiency_score * cls.WEIGHTS["efficiency"]
         )
-        return round(max(0.0, min(1.0, score)), 4)
+        return round(max(cls.MIN_SCORE, min(cls.MAX_SCORE, score)), 4)
 
     @staticmethod
     def _approval_completeness(state: "DealRoomState", mandatory_ids) -> float:

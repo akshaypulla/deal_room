@@ -572,11 +572,11 @@ class DealRoomEnvironment:
         ):
             self._state.deal_failed = True
             self._state.failure_reason = "silent_veto"
-            return True, 0.0
+            return True, CCIGrader.MIN_SCORE
         if self._state.round_number >= self._state.max_rounds - 1:
             self._state.deal_failed = True
             self._state.failure_reason = "timeout"
-            return True, 0.0
+            return True, CCIGrader.MIN_SCORE
         return False, 0.0
 
     def close(self) -> None:

@@ -34,17 +34,25 @@ def make_state(feasible: bool = True) -> DealRoomState:
 
 
 def test_grader_returns_zero_for_infeasible_close():
-    assert CCIGrader.compute(make_state(feasible=False)) == 0.0
+    assert CCIGrader.compute(make_state(feasible=False)) == CCIGrader.MIN_SCORE
 
 
 def test_grader_returns_positive_for_feasible_close():
-    assert CCIGrader.compute(make_state(feasible=True)) > 0.0
+    assert 0.0 < CCIGrader.compute(make_state(feasible=True)) < 1.0
 
 
 def test_grader_returns_zero_when_constraint_unresolved():
     state = make_state(feasible=True)
     state.hidden_constraints["budget_ceiling"]["resolved"] = False
-    assert CCIGrader.compute(state) == 0.0
+    assert CCIGrader.compute(state) == CCIGrader.MIN_SCORE
+
+
+def test_grader_score_is_strictly_inside_open_interval():
+    feasible = CCIGrader.compute(make_state(feasible=True))
+    infeasible = CCIGrader.compute(make_state(feasible=False))
+
+    assert 0.0 < infeasible < 1.0
+    assert 0.0 < feasible < 1.0
 
 
 def test_grader_penalizes_relationship_damage():

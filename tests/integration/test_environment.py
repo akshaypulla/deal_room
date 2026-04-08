@@ -1,5 +1,6 @@
 from models import DealRoomAction
 from server.deal_room_environment import DealRoomEnvironment
+from server.grader import CCIGrader
 
 
 def test_reset_creates_dynamic_roster(env: DealRoomEnvironment):
@@ -92,7 +93,7 @@ def test_feasible_close_returns_terminal_score(env: DealRoomEnvironment):
         )
     )
     assert done is True
-    assert reward > 0.0
+    assert 0.0 < reward < 1.0
     assert obs.done is True
 
 
@@ -124,7 +125,7 @@ def test_feasible_close_on_final_round_scores_instead_of_timing_out(env: DealRoo
         )
     )
     assert done is True
-    assert reward > 0.0
+    assert 0.0 < reward < 1.0
     assert obs.done is True
 
 
@@ -158,5 +159,22 @@ def test_legal_review_can_close_directly_on_final_round_when_ready(env: DealRoom
         )
     )
     assert done is True
-    assert reward > 0.0
+    assert 0.0 < reward < 1.0
+    assert obs.done is True
+
+
+def test_timeout_terminal_score_stays_inside_open_interval(env: DealRoomEnvironment):
+    env.reset(seed=42, task_id="aligned")
+    env.state.round_number = env.state.max_rounds - 1
+
+    obs, reward, done, _ = env.step(
+        DealRoomAction(
+            action_type="direct_message",
+            target=next(iter(env.state.stakeholders)),
+            message="Checking whether timeout terminal scoring stays inside the open interval.",
+        )
+    )
+
+    assert done is True
+    assert reward == CCIGrader.MIN_SCORE
     assert obs.done is True
