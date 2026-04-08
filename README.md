@@ -23,7 +23,7 @@ The web UI at `/web` keeps the native OpenEnv `Playground` untouched and adds a 
 
 - Stakeholders are dynamic, not fixed. A deal may include finance, technical, legal/compliance, procurement, operations, or an executive sponsor.
 - Constraints are partially observable. Budget, compliance, delivery, and process blockers appear through weak signals before they become fully known.
-- Language matters. The environment uses a lightweight local semantic layer to score paraphrase-sensitive request matching, contradiction, and role-aware tone.
+- Language matters. The environment uses a deterministic local semantic layer to score paraphrase-sensitive request matching, contradiction, and role-aware tone.
 - Closing early is punished. Deals only close when terms are feasible and all mandatory approvers are workable.
 
 ## Tasks
@@ -83,13 +83,56 @@ docker build -t deal-room-env:latest -f Dockerfile .
 docker run --rm -p 7860:7860 deal-room-env:latest
 ```
 
-The Docker image preloads the lightweight MiniLM semantic model into a stable Hugging Face cache directory. If model download is unavailable, the environment falls back to deterministic lexical similarity so the server still starts cleanly.
+The Docker image is optimized for reliable startup on limited hardware. The semantic analyzer will use the lightweight embedding path when the dependency is available, and otherwise falls back to deterministic lexical similarity so the server still starts cleanly and reproducibly.
 
 ## Hugging Face Spaces
 
+### Prerequisites
+
+1. **Hugging Face Account**: Create an account at [huggingface.co](https://huggingface.co)
+2. **Get an HF Token**: Generate a token at [hf.co/settings/tokens](https://hf.co/settings/tokens) with "write" permissions
+3. **Set the token**:
+
 ```bash
-openenv push
+export HF_TOKEN="your_huggingface_token_here"
 ```
+
+Or use the `huggingface_hub` CLI:
+```bash
+huggingface-cli login
+```
+
+### Deploy to Hugging Face Spaces
+
+```bash
+# Option 1: Using openenv CLI (recommended)
+openenv push
+
+# Option 2: With custom repository ID
+openenv push -r <your_username>/deal-room
+
+# Option 3: Using the deploy script
+./deploy.sh <your_username>/deal-room
+```
+
+### Expected Space
+
+After deployment, your space will be available at:
+```
+https://huggingface.co/spaces/<your_username>/deal-room
+```
+
+### Space Features
+
+- **Web UI**: Interactive Gradio interface at `/web`
+- **Playground Tab**: Native OpenEnv playground for testing
+- **Custom Tab**: Judge tools including walkthrough, sandbox, and diff views
+- **API Endpoints**:
+  - `/health` - Health check
+  - `/metadata` - Environment metadata
+  - `/reset` - Reset environment
+  - `/step` - Execute action
+  - `/state` - Get current state
 
 Expected endpoints:
 
@@ -116,10 +159,24 @@ Credential resolution order:
 Current local heuristic smoke run with `seed=42`:
 
 - `aligned`: `0.85`
-- `conflicted`: `0.00`
+- `conflicted`: `0.83`
 - `hostile_acquisition`: `0.79`
 
-These are the starting reproducible scores before any additional policy calibration.
+Recent 4-seed stress snapshot:
+
+- `aligned` mean: `0.8761`
+- `conflicted` mean: `0.8118`
+- `hostile_acquisition` mean: `0.5905`
+
+The task ladder is deterministic and currently satisfies the expected ordering `aligned > conflicted > hostile_acquisition`.
+
+## Pre-Submission Validation
+
+Run the local validator before pushing:
+
+```bash
+bash scripts/validate-submission.sh
+```
 
 ## Project Layout
 

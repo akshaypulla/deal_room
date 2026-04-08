@@ -25,6 +25,8 @@ class CCIGrader:
             return 0.0
         if not state.feasibility_state.get("is_feasible", False):
             return 0.0
+        if any(not constraint.get("resolved") for constraint in state.hidden_constraints.values()):
+            return 0.0
 
         mandatory_ids = [
             stakeholder_id

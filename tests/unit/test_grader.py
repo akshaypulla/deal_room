@@ -39,3 +39,19 @@ def test_grader_returns_zero_for_infeasible_close():
 
 def test_grader_returns_positive_for_feasible_close():
     assert CCIGrader.compute(make_state(feasible=True)) > 0.0
+
+
+def test_grader_returns_zero_when_constraint_unresolved():
+    state = make_state(feasible=True)
+    state.hidden_constraints["budget_ceiling"]["resolved"] = False
+    assert CCIGrader.compute(state) == 0.0
+
+
+def test_grader_penalizes_relationship_damage():
+    clean = make_state(feasible=True)
+    damaged = make_state(feasible=True)
+    damaged.stakeholder_private["finance"]["permanent_marks"] = [
+        "premature_close",
+        "semantic_contradiction",
+    ]
+    assert CCIGrader.compute(damaged) < CCIGrader.compute(clean)

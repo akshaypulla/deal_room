@@ -94,3 +94,35 @@ def test_feasible_close_returns_terminal_score(env: DealRoomEnvironment):
     assert done is True
     assert reward > 0.0
     assert obs.done is True
+
+
+def test_feasible_close_on_final_round_scores_instead_of_timing_out(env: DealRoomEnvironment):
+    env.reset(seed=42, task_id="aligned")
+    for stakeholder_id, payload in env.state.stakeholder_private.items():
+        payload["approval"] = 0.75
+        payload["private_resistance"] = 0.30
+        payload["trust"] = 0.80
+    for constraint in env.state.hidden_constraints.values():
+        constraint["status"] = "known"
+        constraint["resolved"] = True
+    env.state.requested_artifacts = {stakeholder_id: [] for stakeholder_id in env.state.stakeholders}
+    env.state.feasibility_state = {"is_feasible": True, "violations": []}
+    env.state.deal_stage = "final_approval"
+    env.state.round_number = env.state.max_rounds - 1
+    obs, reward, done, _ = env.step(
+        DealRoomAction(
+            action_type="group_proposal",
+            target="all",
+            message="I believe we are ready to move to final approval.",
+            proposed_terms={
+                "price": 180000,
+                "timeline_weeks": 14,
+                "security_commitments": ["gdpr"],
+                "support_level": "named_support_lead",
+                "liability_cap": "mutual_cap",
+            },
+        )
+    )
+    assert done is True
+    assert reward > 0.0
+    assert obs.done is True

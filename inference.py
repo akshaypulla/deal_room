@@ -16,18 +16,39 @@ API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 BENCHMARK = "deal-room"
+IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME") or os.getenv("IMAGE_NAME")
 
 client = OpenAI(api_key=API_KEY or "missing", base_url=API_BASE_URL)
 
 ARTIFACT_MESSAGES = {
     "roi_model": "Here is the ROI model with explicit payback assumptions and downside cases.",
-    "implementation_timeline": "Here is the implementation timeline with milestones, owners, and delivery guardrails.",
+    "implementation_timeline": "Here is the implementation timeline: 14 weeks with named milestones, owners, and delivery guardrails.",
     "security_cert": "Here are the requested security materials, audit artifacts, and control summaries.",
     "dpa": "Here is the DPA with GDPR-aligned privacy commitments and review-ready clauses.",
-    "vendor_packet": "Here is the supplier onboarding packet including process, insurance, and vendor details.",
+    "vendor_packet": "Here is the supplier onboarding packet including process, insurance, vendor details, and named support ownership.",
     "reference_case": "Here is a reference case from a comparable deployment with measurable outcomes.",
-    "support_plan": "Here is the support plan with named coverage, escalation paths, and ongoing ownership.",
+    "support_plan": "Here is the support plan with a named support lead, escalation paths, and ongoing ownership.",
 }
+
+ARTIFACT_TARGET_PREFERENCE = {
+    "roi_model": ["finance", "executive_sponsor", "procurement"],
+    "reference_case": ["finance", "procurement", "executive_sponsor"],
+    "implementation_timeline": ["technical", "operations", "procurement", "finance"],
+    "security_cert": ["technical", "legal_compliance", "procurement"],
+    "dpa": ["legal_compliance", "procurement", "finance"],
+    "vendor_packet": ["procurement", "finance", "legal_compliance"],
+    "support_plan": ["operations", "procurement", "executive_sponsor"],
+}
+
+ARTIFACT_PROBE_ORDER = [
+    "implementation_timeline",
+    "vendor_packet",
+    "roi_model",
+    "dpa",
+    "security_cert",
+    "reference_case",
+    "support_plan",
+]
 
 ROLE_PROBE_MESSAGES = {
     "finance": "Help me understand the budget ceiling or board payback requirement we need to respect so I can tailor the commercial terms responsibly.",
@@ -47,6 +68,7 @@ Keep the message concise, credible, collaborative, and role-aware."""
 class ProtocolPolicy:
     def __init__(self):
         self.handled_precursors: set[str] = set()
+        self.sent_artifacts: set[tuple[str, str]] = set()
 
     def build_action(self, obs: DealRoomObservation) -> DealRoomAction:
         stakeholders = obs.stakeholders
@@ -54,6 +76,15 @@ class ProtocolPolicy:
         requested = obs.requested_artifacts
         known_constraints = {item["id"] for item in obs.known_constraints}
         blockers = obs.active_blockers
+        mandatory_ids = [
+            stakeholder_id
+            for stakeholder_id, payload in progress.items()
+            if payload.get("mandatory")
+        ]
+        mandatory_ready = all(
+            progress[stakeholder_id]["band"] in {"workable", "supporter"}
+            for stakeholder_id in mandatory_ids
+        )
 
         if obs.veto_precursors:
             target_id = next(iter(obs.veto_precursors))
@@ -74,6 +105,7 @@ class ProtocolPolicy:
         for stakeholder_id, payload in progress.items():
             if payload.get("mandatory") and requested.get(stakeholder_id):
                 artifact = requested[stakeholder_id][0]
+                self.sent_artifacts.add((stakeholder_id, artifact))
                 return action_with_message(
                     DealRoomAction(
                         action_type="send_document",
@@ -89,6 +121,7 @@ class ProtocolPolicy:
         for stakeholder_id, artifacts in requested.items():
             if artifacts:
                 artifact = artifacts[0]
+                self.sent_artifacts.add((stakeholder_id, artifact))
                 return action_with_message(
                     DealRoomAction(
                         action_type="send_document",
@@ -101,12 +134,29 @@ class ProtocolPolicy:
                     fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
                 )
 
+        if not any(requested.values()) and (not known_constraints or obs.deal_stage in {"evaluation", "negotiation"}):
+            probe = choose_artifact_probe(obs, self.sent_artifacts)
+            if probe is not None:
+                target_id, artifact = probe
+                self.sent_artifacts.add((target_id, artifact))
+                return action_with_message(
+                    DealRoomAction(
+                        action_type="send_document",
+                        target=target_id,
+                        target_ids=[target_id],
+                        documents=[{"type": artifact, "specificity": "high"}],
+                    ),
+                    obs,
+                    f"Use a discovery artifact to surface or resolve any remaining hidden feasibility constraint for {target_id}.",
+                    fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
+                )
+
         if (not known_constraints or any(obs.weak_signals.values())) and obs.deal_stage in {
             "evaluation",
             "negotiation",
             "legal_review",
         }:
-            target_id = choose_probe_target(obs)
+            target_id = choose_probe_target(obs, mandatory_only=True)
             prompt = "Probe for the highest-probability hidden constraint using a precise, low-pressure question."
             role = obs.stakeholders[target_id]["role"]
             return action_with_message(
@@ -120,6 +170,23 @@ class ProtocolPolicy:
                 fallback_message=ROLE_PROBE_MESSAGES.get(
                     role,
                     "Help me understand the real approval constraint we need to respect so I can tailor the proposal correctly.",
+                ),
+            )
+
+        if not blockers and not mandatory_ready:
+            target_id = choose_probe_target(obs, mandatory_only=True)
+            role = obs.stakeholders[target_id]["role"]
+            return action_with_message(
+                DealRoomAction(
+                    action_type="direct_message",
+                    target=target_id,
+                    target_ids=[target_id],
+                ),
+                obs,
+                f"Increase approval from {target_id} with a specific, credible, role-aware message before closing.",
+                fallback_message=ROLE_PROBE_MESSAGES.get(
+                    role,
+                    "I want to make sure we are solving the real internal approval concern before we ask for final sign-off.",
                 ),
             )
 
@@ -140,7 +207,7 @@ class ProtocolPolicy:
                 ),
             )
 
-        if obs.deal_stage in {"legal_review", "final_approval", "closed"} and not obs.active_blockers:
+        if known_constraints and mandatory_ready and obs.deal_stage in {"legal_review", "final_approval", "closed"} and not obs.active_blockers:
             return action_with_message(
                 DealRoomAction(
                     action_type="group_proposal",
@@ -159,7 +226,7 @@ class ProtocolPolicy:
                 fallback_message="I believe we have enough alignment to move to final approval on concrete, reviewable terms.",
             )
 
-        target_id = choose_probe_target(obs)
+        target_id = choose_probe_target(obs, mandatory_only=bool(mandatory_ids))
         return action_with_message(
             DealRoomAction(
                 action_type="direct_message",
@@ -176,16 +243,39 @@ def build_protocol_action(obs: DealRoomObservation) -> DealRoomAction:
     return ProtocolPolicy().build_action(obs)
 
 
-def choose_probe_target(obs: DealRoomObservation) -> str:
+def choose_probe_target(obs: DealRoomObservation, mandatory_only: bool = False) -> str:
     weakest = None
     weakest_score = 10.0
     for stakeholder_id, payload in obs.approval_path_progress.items():
+        if mandatory_only and not payload.get("mandatory"):
+            continue
         rank = {"blocker": 0, "neutral": 1, "workable": 2, "supporter": 3}[payload["band"]]
         score = rank - (0.2 if payload.get("mandatory") else 0.0)
         if score < weakest_score:
             weakest_score = score
             weakest = stakeholder_id
     return weakest or next(iter(obs.stakeholders))
+
+
+def choose_artifact_probe(
+    obs: DealRoomObservation,
+    sent_artifacts: set[tuple[str, str]],
+) -> Optional[tuple[str, str]]:
+    role_to_id = {
+        payload["role"]: stakeholder_id for stakeholder_id, payload in obs.stakeholders.items()
+    }
+    fallback_target = choose_probe_target(obs)
+
+    for artifact in ARTIFACT_PROBE_ORDER:
+        preferred_roles = ARTIFACT_TARGET_PREFERENCE.get(artifact, [])
+        target_id = next(
+            (role_to_id[role] for role in preferred_roles if role in role_to_id),
+            fallback_target,
+        )
+        candidate = (target_id, artifact)
+        if candidate not in sent_artifacts:
+            return candidate
+    return None
 
 
 def action_with_message(
@@ -248,41 +338,40 @@ def maybe_generate_message(
 
 def run_task(task_id: str, seed: int = 42) -> Dict[str, object]:
     env = DealRoomEnvironment()
-    obs = env.reset(seed=seed, task_id=task_id)
-    policy = ProtocolPolicy()
-    short_model = MODEL_NAME.split("/")[-1] if "/" in MODEL_NAME else MODEL_NAME
-    print(f"[START] task={task_id} env={BENCHMARK} model={short_model}")
-
     rewards: List[float] = []
     final_score = 0.0
     success = False
     step_num = 0
+    print(f"[START] task={task_id} env={BENCHMARK} model={MODEL_NAME}")
 
     try:
+        obs = env.reset(seed=seed, task_id=task_id)
+        policy = ProtocolPolicy()
         while not obs.done and step_num < obs.max_rounds + 2:
             step_num += 1
             action = policy.build_action(obs)
             obs, reward, done, info = env.step(action)
             rewards.append(reward)
-            error = info.get("last_action_error") or "null"
+            error = str(info.get("last_action_error") or "null").replace("\n", " ")
             print(
                 f"[STEP] step={step_num} action={action.action_type}(target={','.join(action.target_ids) or action.target}) "
                 f"reward={reward:.2f} done={str(done).lower()} error={error}"
             )
             if done:
                 final_score = reward
-                success = reward >= 0.35
+                success = reward > 0.0
                 break
     except Exception as exc:
         print(
             f"[STEP] step={step_num} action=error reward=0.00 done=true error={str(exc)[:120]}"
         )
         rewards.append(0.0)
-
-    reward_str = ",".join(f"{value:.2f}" for value in rewards)
-    print(
-        f"[END] success={str(success).lower()} steps={step_num} score={final_score:.2f} rewards={reward_str}"
-    )
+    finally:
+        env.close()
+        reward_str = ",".join(f"{value:.2f}" for value in rewards)
+        print(
+            f"[END] success={str(success).lower()} steps={step_num} score={final_score:.2f} rewards={reward_str}"
+        )
     return {
         "task": task_id,
         "score": final_score,

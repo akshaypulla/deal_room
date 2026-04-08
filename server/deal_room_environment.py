@@ -563,6 +563,9 @@ class DealRoomEnvironment:
         return not self._state.active_blockers
 
     def _check_terminal(self, action: DealRoomAction) -> Tuple[bool, float]:
+        if self._state.deal_closed:
+            self._state.final_terms = deepcopy(self._state.offer_state)
+            return True, CCIGrader.compute(self._state)
         if any(
             private.get("veto_power") and private["private_resistance"] > 0.72
             for private in self._state.stakeholder_private.values()
@@ -574,10 +577,11 @@ class DealRoomEnvironment:
             self._state.deal_failed = True
             self._state.failure_reason = "timeout"
             return True, 0.0
-        if self._state.deal_closed:
-            self._state.final_terms = deepcopy(self._state.offer_state)
-            return True, CCIGrader.compute(self._state)
         return False, 0.0
+
+    def close(self) -> None:
+        """No-op close for inference-script compatibility."""
+        return None
 
     def _mandatory_stakeholders(self) -> List[str]:
         return [
