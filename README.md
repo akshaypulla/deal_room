@@ -150,11 +150,11 @@ Expected endpoints:
 python inference.py
 ```
 
-Credential resolution order:
+Credential resolution behavior:
 
-- `HF_TOKEN`
-- `OPENAI_API_KEY`
-- `API_KEY`
+- During hackathon evaluation, `inference.py` prefers the injected `API_BASE_URL` + `API_KEY` pair and will use the OpenAI client against that LiteLLM proxy by default.
+- For local development, it can fall back to `OPENAI_API_KEY` or `HF_TOKEN` if `API_KEY` is not present.
+- Set `DEALROOM_ENABLE_LLM_MESSAGES=0` only if you intentionally want fully local fallback behavior without proxy calls.
 
 Current local heuristic smoke run with `seed=42`:
 

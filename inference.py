@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from functools import lru_cache
 from typing import Dict, List, Optional
 
 from openai import OpenAI
@@ -12,18 +13,9 @@ from openai import OpenAI
 from models import DealRoomAction, DealRoomObservation
 from server.deal_room_environment import DealRoomEnvironment
 
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 BENCHMARK = "deal-room"
 IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME") or os.getenv("IMAGE_NAME")
-USE_LLM_MESSAGES = os.getenv("DEALROOM_ENABLE_LLM_MESSAGES", "0").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-
-client = OpenAI(api_key=API_KEY or "missing", base_url=API_BASE_URL)
 
 ARTIFACT_MESSAGES = {
     "roi_model": "Here is the ROI model with explicit payback assumptions and downside cases.",
@@ -64,10 +56,34 @@ ROLE_PROBE_MESSAGES = {
     "executive_sponsor": "What internal approval risk do we need to de-risk before this is safe to sponsor?",
 }
 
-SYSTEM_PROMPT = """You are the lead negotiator for an enterprise software vendor.
-Return only JSON with keys:
-action_type, target_ids, target, message, documents, proposed_terms, channel, mode
-Keep the message concise, credible, collaborative, and role-aware."""
+MESSAGE_SYSTEM_PROMPT = """You are the lead negotiator for an enterprise software vendor.
+Return only compact JSON with one key: "message".
+The message must be concise, credible, collaborative, and role-aware.
+Do not include markdown or any other keys."""
+
+
+def resolve_api_credentials() -> tuple[Optional[str], str]:
+    injected_api_key = os.getenv("API_KEY")
+    injected_api_base_url = os.getenv("API_BASE_URL")
+    fallback_api_key = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN")
+    api_key = injected_api_key or fallback_api_key
+    api_base_url = injected_api_base_url or "https://router.huggingface.co/v1"
+    return api_key, api_base_url
+
+
+def should_use_llm_messages() -> bool:
+    explicit = os.getenv("DEALROOM_ENABLE_LLM_MESSAGES")
+    if explicit is not None:
+        return explicit.lower() in {"1", "true", "yes"}
+    return bool(os.getenv("API_KEY") and os.getenv("API_BASE_URL"))
+
+
+@lru_cache(maxsize=1)
+def get_client() -> Optional[OpenAI]:
+    api_key, api_base_url = resolve_api_credentials()
+    if not api_key:
+        return None
+    return OpenAI(api_key=api_key, base_url=api_base_url)
 
 
 class ProtocolPolicy:
@@ -336,7 +352,7 @@ def action_with_message(
     fallback_message: Optional[str] = None,
 ) -> DealRoomAction:
     message = fallback_message or "I want to make this easy to evaluate and safe to approve."
-    if USE_LLM_MESSAGES and API_KEY:
+    if should_use_llm_messages():
         llm_message = maybe_generate_message(obs, action, instruction)
         if llm_message:
             message = llm_message
@@ -349,13 +365,17 @@ def maybe_generate_message(
     action: DealRoomAction,
     instruction: str,
 ) -> Optional[str]:
+    client = get_client()
+    if client is None:
+        return None
+
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
             temperature=0.0,
             max_tokens=180,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": MESSAGE_SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": json.dumps(
