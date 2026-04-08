@@ -147,9 +147,17 @@ def run_task_flow(task_id: str, seed: int) -> None:
 
 def main():
     web_page = request("/web", parse_json=False)
-    assert "Playground" in web_page
-    assert "Custom" in web_page
-    assert "deal-room" in web_page.lower()
+    assert "iframe" in web_page.lower()
+    assert "/ui/" in web_page
+    assert "dealroom" in web_page.lower()
+
+    web_page_slash = request("/web/", parse_json=False)
+    assert "iframe" in web_page_slash.lower()
+    assert "/ui/" in web_page_slash
+
+    ui_page = request("/ui/", parse_json=False)
+    assert "Playground" in ui_page
+    assert "Custom" in ui_page
 
     health = request("/health")
     assert health["status"] == "ok"

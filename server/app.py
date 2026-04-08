@@ -7,7 +7,7 @@ import os
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from models import DealRoomAction
@@ -21,9 +21,60 @@ app.add_middleware(
 _env = DealRoomEnvironment()
 
 
+def _web_shell_html() -> str:
+    return """
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>DealRoom Web</title>
+        <style>
+          :root {
+            color-scheme: dark;
+          }
+          * { box-sizing: border-box; }
+          html, body {
+            margin: 0;
+            height: 100%;
+            background: #0b1118;
+            overflow: hidden;
+          }
+          iframe {
+            border: 0;
+            width: 100%;
+            height: 100vh;
+            background: #0b1118;
+          }
+        </style>
+      </head>
+      <body>
+        <iframe id="dealroom-ui-frame" src="/ui/" title="DealRoom Web UI"></iframe>
+        <script>
+          const search = window.location.search || "";
+          const frame = document.getElementById("dealroom-ui-frame");
+          if (frame && search) {
+            frame.src = "/ui/" + search;
+          }
+        </script>
+      </body>
+    </html>
+    """
+
+
 @app.get("/")
 async def root():
-    return RedirectResponse(url="/web")
+    return HTMLResponse(_web_shell_html())
+
+
+@app.get("/web")
+async def web_shell():
+    return HTMLResponse(_web_shell_html())
+
+
+@app.get("/web/")
+async def web_shell_slash():
+    return HTMLResponse(_web_shell_html())
 
 
 class ResetRequest(BaseModel):
@@ -97,7 +148,7 @@ def _setup_gradio_ui():
         from server.gradio_standalone import create_dealroom_gradio_app
 
         _gradio_app = create_dealroom_gradio_app()
-        app = gr.mount_gradio_app(app, _gradio_app, path="/web")
+        app = gr.mount_gradio_app(app, _gradio_app, path="/ui")
         return True
     except ImportError as e:
         print(f"Standalone Gradio not available: {e}")
@@ -150,7 +201,7 @@ def _setup_gradio_ui():
         app = gr.mount_gradio_app(
             app,
             _web_blocks,
-            path="/web",
+            path="/ui",
             theme=OPENENV_GRADIO_THEME,
             css=OPENENV_GRADIO_CSS,
         )
@@ -163,7 +214,8 @@ def _setup_gradio_ui():
 if _web_enabled():
     if not _setup_gradio_ui():
 
-        @app.get("/web")
+        @app.get("/ui")
+        @app.get("/ui/")
         async def web_unavailable():
             return HTMLResponse(
                 "<h1>DealRoom Web UI unavailable</h1>"
