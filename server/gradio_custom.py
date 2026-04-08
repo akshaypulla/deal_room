@@ -41,111 +41,184 @@ RL_CHIPS = [
 ]
 STAGE_ORDER = ["evaluation", "negotiation", "legal_review", "final_approval", "closed"]
 CUSTOM_CSS = """
-.dealroom-custom { color: #102033; }
-.dealroom-custom .hero {
-  background: linear-gradient(135deg, rgba(11,34,58,.98), rgba(18,70,78,.95));
-  color: #f6f2e9;
-  border-radius: 22px;
-  padding: 24px;
-  margin-bottom: 16px;
-  box-shadow: 0 18px 45px rgba(16,32,51,.18);
+#dealroom-classic-root {
+  background: #0d1117;
+  border: 1px solid #232b36;
+  border-radius: 12px;
+  padding: 16px;
 }
-.dealroom-custom .hero h1 { margin: 0 0 10px; font-size: 2rem; line-height: 1.1; }
-.dealroom-custom .hero p { margin: 0; color: rgba(246,242,233,.88); }
-.dealroom-custom .chip-row, .dealroom-custom .badge-row {
-  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+#dealroom-classic-root .dealroom-custom {
+  color: #e5e7eb;
+  font-family: "IBM Plex Sans", "Inter", system-ui, sans-serif;
 }
-.dealroom-custom .chip {
+#dealroom-classic-root .classic-header {
+  background: #0f141b;
+  color: #f3f4f6;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  border: 1px solid #283240;
+  box-shadow: none;
+}
+#dealroom-classic-root .classic-header h1 {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+#dealroom-classic-root .classic-header p {
+  margin: 0;
+  color: #9ea9b8;
+}
+#dealroom-classic-root .toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+#dealroom-classic-root .chip-row,
+#dealroom-classic-root .badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+#dealroom-classic-root .chip {
   display: inline-flex;
-  padding: 6px 10px;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: #eef3f7;
-  color: #183149;
-  border: 1px solid rgba(16,32,51,.08);
-  font-size: 0.86rem;
+  background: #141a22;
+  color: #d1d5db;
+  border: 1px solid #2e3947;
+  font-size: 0.8rem;
 }
-.dealroom-custom .chip--teal { background: #d9f1ef; color: #0d5551; }
-.dealroom-custom .chip--amber { background: #fff2d8; color: #8d5b00; }
-.dealroom-custom .chip--risk { background: #ffe0d9; color: #9b3412; }
-.dealroom-custom .panel {
-  background: #fffdf9;
-  border: 1px solid rgba(16,32,51,.08);
-  border-radius: 18px;
-  padding: 18px;
-  box-shadow: 0 10px 30px rgba(16,32,51,.06);
+#dealroom-classic-root .chip--teal {
+  background: rgba(22, 163, 74, 0.14);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #86efac;
 }
-.dealroom-custom .panel h3, .dealroom-custom .panel h4 {
+#dealroom-classic-root .chip--amber {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: #fcd34d;
+}
+#dealroom-classic-root .chip--risk {
+  background: rgba(239, 68, 68, 0.14);
+  border-color: rgba(239, 68, 68, 0.28);
+  color: #fca5a5;
+}
+#dealroom-classic-root .panel {
+  background: #10161d;
+  border: 1px solid #283240;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: none;
+}
+#dealroom-classic-root .panel + .panel {
+  margin-top: 12px;
+}
+#dealroom-classic-root .panel h3,
+#dealroom-classic-root .panel h4 {
   margin-top: 0;
-  color: #102033;
+  color: #f3f4f6;
 }
-.dealroom-custom .soft { color: #5c6c7d; }
-.dealroom-custom .grid-2 {
+#dealroom-classic-root .section-note {
+  margin-top: 8px;
+  color: #97a3b3;
+  font-size: 0.92rem;
+}
+#dealroom-classic-root .soft { color: #97a3b3; }
+#dealroom-classic-root .grid-2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
 }
-.dealroom-custom .grid-3 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+#dealroom-classic-root .stakeholder-card,
+#dealroom-classic-root .metric-card,
+#dealroom-classic-root .timeline-card,
+#dealroom-classic-root .score-card,
+#dealroom-classic-root .diff-card {
+  border-radius: 8px;
+  padding: 12px;
+  background: #0b1016;
+  border: 1px solid #293342;
 }
-.dealroom-custom .stakeholder-card,
-.dealroom-custom .metric-card,
-.dealroom-custom .timeline-card,
-.dealroom-custom .score-card,
-.dealroom-custom .diff-card {
-  border-radius: 14px;
-  padding: 14px;
-  background: #f9f6ef;
-  border: 1px solid rgba(16,32,51,.08);
-}
-.dealroom-custom .timeline-card { margin-bottom: 10px; }
-.dealroom-custom .warning {
+#dealroom-classic-root .timeline-card { margin-bottom: 10px; }
+#dealroom-classic-root .warning {
   margin-top: 12px;
   padding: 12px 14px;
-  border-radius: 14px;
-  background: #fff0eb;
-  color: #8e2f19;
-  border: 1px solid rgba(156,52,18,.14);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.22);
 }
-.dealroom-custom .stage-rail {
+#dealroom-classic-root .stage-rail {
   display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0;
 }
-.dealroom-custom .stage-pill {
+#dealroom-classic-root .stage-pill {
   padding: 6px 10px;
   border-radius: 999px;
-  background: #eef3f7;
-  color: #435465;
+  background: #141a22;
+  color: #9aa5b4;
+  border: 1px solid #2e3947;
   font-size: 0.84rem;
 }
-.dealroom-custom .stage-pill.active {
-  background: #113451;
-  color: #fffdf9;
+#dealroom-classic-root .stage-pill.active {
+  background: rgba(22, 163, 74, 0.14);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #86efac;
 }
-.dealroom-custom .confidence {
+#dealroom-classic-root .confidence {
   margin-top: 10px;
 }
-.dealroom-custom .confidence__track {
+#dealroom-classic-root .confidence__track {
   width: 100%;
-  height: 10px;
+  height: 8px;
   border-radius: 999px;
-  background: #ece6da;
+  background: #1b2430;
   overflow: hidden;
 }
-.dealroom-custom .confidence__fill {
+#dealroom-classic-root .confidence__fill {
   height: 100%;
-  background: linear-gradient(90deg, #df8c29, #11806f);
+  background: linear-gradient(90deg, #d97706, #16a34a);
 }
-.dealroom-custom .code-block {
+#dealroom-classic-root .code-block {
   padding: 10px 12px;
-  border-radius: 12px;
-  background: #11283d;
-  color: #f6f2e9;
+  border-radius: 8px;
+  background: #0a0f15;
+  color: #d1d5db;
+  border: 1px solid #293342;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
   word-break: break-word;
 }
-.dealroom-custom ul { margin: 0; padding-left: 18px; }
+#dealroom-classic-root ul { margin: 0; padding-left: 18px; }
+#dealroom-classic-root .gr-button {
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  border-color: #2e3947 !important;
+}
+#dealroom-classic-root .gr-button-primary {
+  background: #1f8b4c !important;
+}
+#dealroom-classic-root .gr-group,
+#dealroom-classic-root .gr-box,
+#dealroom-classic-root .gr-form {
+  border-color: #283240 !important;
+}
+#dealroom-classic-root .gr-accordion {
+  background: #0f141b !important;
+  border: 1px solid #283240 !important;
+}
+#dealroom-classic-root .gr-markdown p {
+  color: #d1d5db;
+}
+#dealroom-classic-root input,
+#dealroom-classic-root textarea,
+#dealroom-classic-root select {
+  background: #0b1016 !important;
+  color: #e5e7eb !important;
+  border-color: #2b3542 !important;
+}
 """
 
 
@@ -618,19 +691,32 @@ def build_custom_tab(
             f"<span class='chip chip--teal'>{_escape(item)}</span>" for item in RL_CHIPS
         )
         return (
-            "<div class='hero'>"
-            "<h1>A non-toy RL environment for enterprise negotiation.</h1>"
+            "<div class='classic-header'>"
+            "<h1>Classic DealRoom Control Panel</h1>"
             "<p>"
-            "DealRoom simulates the work humans actually do in software procurement: "
-            "building committee consensus, discovering hidden blockers, sequencing evidence, "
-            "and avoiding irreversible trust damage."
+            "Use the walkthrough to understand the environment, then move into the sandbox "
+            "to test negotiation decisions against the same deterministic engine."
             "</p>"
             f"<div class='chip-row'>{proof_html}</div>"
             f"<div class='chip-row'>{rl_html}</div>"
             "</div>"
             "<div class='grid-2'>"
             "<div class='panel'>"
-            "<h3>Why judges can trust this</h3>"
+            "<h3>Quick start</h3>"
+            "<ul>"
+            "<li>Start the guided walkthrough to see a seeded conflicted episode.</li>"
+            "<li>Use the live sandbox to test manual moves or the baseline agent.</li>"
+            "<li>Finish a run to unlock the debrief and replay comparison.</li>"
+            "</ul>"
+            "<p class='section-note'>Nothing in the stock playground changes. This custom page is the explanation and analysis layer.</p>"
+            "</div>"
+            "<div class='panel'>"
+            "<h3>Current session</h3>"
+            f"<p class='soft'>Task {_escape(TASK_DISPLAY.get(view_state['task'], view_state['task']))} · seed {view_state['seed']} · source {_escape(view_state['source'])}</p>"
+            f"<p class='soft'>{_escape(view_state.get('status_message', 'Ready.'))}</p>"
+            "</div>"
+            "<div class='panel'>"
+            "<h3>Why this environment is not a toy</h3>"
             "<ul>"
             "<li>Dynamic 2–4 stakeholder roster per episode.</li>"
             "<li>1–2 hidden hard constraints that must be inferred and resolved.</li>"
@@ -639,9 +725,8 @@ def build_custom_tab(
             "</ul>"
             "</div>"
             "<div class='panel'>"
-            "<h3>Current mode</h3>"
-            f"<p class='soft'>Task {_escape(TASK_DISPLAY.get(view_state['task'], view_state['task']))} · seed {view_state['seed']} · source {_escape(view_state['source'])}</p>"
-            f"<p class='soft'>{_escape(view_state.get('status_message', 'Ready.'))}</p>"
+            "<h3>Recommended path</h3>"
+            "<p class='soft'>1. Walk through the seeded demo. 2. Take over manually. 3. Compare the result against the baseline agent or a bad move run.</p>"
             "</div>"
             "</div>"
         )
@@ -1118,62 +1203,70 @@ def build_custom_tab(
     def update_diff(saved_runs: List[Dict[str, Any]], left_id: Optional[str], right_id: Optional[str]):
         return _render_diff(_normalize_saved_runs(saved_runs), left_id, right_id)
 
-    with gr.Blocks() as demo:
+    with gr.Blocks(elem_id="dealroom-classic-root") as demo:
         gr.HTML(f"<style>{CUSTOM_CSS}</style>")
-        gr.Markdown(f"## Custom Judge View for `{metadata.name}`", elem_classes=["dealroom-custom"])
+        gr.HTML(
+            (
+                "<div class='classic-header dealroom-custom'>"
+                f"<h1>Custom Console · {html.escape(metadata.name)}</h1>"
+                "<p>Classic, judge-friendly controls for walkthroughs, sandbox testing, and post-run inspection.</p>"
+                "</div>"
+            )
+        )
 
         view_state = gr.State(default_view_state())
         saved_runs = gr.BrowserState(default_saved_runs(), storage_key="dealroom_saved_runs")
 
-        with gr.Row():
+        with gr.Row(elem_classes=["toolbar-row"]):
             start_guide_btn = gr.Button("Watch Guided Walkthrough", variant="primary")
             baseline_btn = gr.Button("Watch Baseline Agent")
             open_sandbox_btn = gr.Button("Open Live Sandbox")
 
         status_box = gr.Markdown("Ready.", elem_classes=["dealroom-custom"])
 
-        with gr.Tabs():
-            with gr.Tab("Overview"):
+        with gr.Row():
+            with gr.Column(scale=4):
                 overview_html = gr.HTML(elem_classes=["dealroom-custom"])
 
-            with gr.Tab("Guided Walkthrough"):
-                with gr.Row():
-                    with gr.Column(scale=5):
-                        guide_html = gr.HTML(elem_classes=["dealroom-custom"])
-                        guide_scene_html = gr.HTML(elem_classes=["dealroom-custom"])
-                    with gr.Column(scale=3):
-                        guide_action_md = gr.Markdown()
-                        with gr.Row():
-                            guide_reset_btn = gr.Button("Reset Walkthrough")
-                            guide_next_btn = gr.Button("Next Step", variant="primary")
-                            guide_take_over_btn = gr.Button("Take Over")
+                with gr.Accordion("Guided Walkthrough", open=True):
+                    guide_html = gr.HTML(elem_classes=["dealroom-custom"])
+                    guide_scene_html = gr.HTML(elem_classes=["dealroom-custom"])
+                    guide_action_md = gr.Markdown()
+                    with gr.Row():
+                        guide_reset_btn = gr.Button("Reset Walkthrough")
+                        guide_next_btn = gr.Button("Next Step", variant="primary")
+                        guide_take_over_btn = gr.Button("Take Over")
 
-            with gr.Tab("Live Sandbox"):
-                with gr.Row():
-                    task_dropdown = gr.Dropdown(TASK_ORDER, value="conflicted", label="Task")
-                    seed_input = gr.Number(value=64, precision=0, label="Seed")
-                    sandbox_reset_btn = gr.Button("Reset Scenario", variant="primary")
-                    sandbox_refresh_btn = gr.Button("Refresh From Current Episode")
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        scenario_map_html = gr.HTML(elem_classes=["dealroom-custom"])
-                    with gr.Column(scale=4):
-                        timeline_html = gr.HTML(elem_classes=["dealroom-custom"])
-                    with gr.Column(scale=3):
-                        judge_lens_html = gr.HTML(elem_classes=["dealroom-custom"])
-
-                with gr.Row():
-                    signals_html = gr.HTML(elem_classes=["dealroom-custom"])
-
-                with gr.Row():
-                    with gr.Column(scale=4):
-                        counterfactual_md = gr.Markdown(label="Counterfactual warnings")
-                    with gr.Column(scale=4):
-                        suggestion_md = gr.Markdown(label="Suggested next action")
-                    with gr.Column(scale=2):
+                with gr.Accordion("Scenario Controls", open=True):
+                    with gr.Row():
+                        task_dropdown = gr.Dropdown(TASK_ORDER, value="conflicted", label="Task")
+                        seed_input = gr.Number(value=64, precision=0, label="Seed")
+                    with gr.Row():
+                        sandbox_reset_btn = gr.Button("Reset Scenario", variant="primary")
+                        sandbox_refresh_btn = gr.Button("Refresh")
+                    counterfactual_md = gr.Markdown(label="Counterfactual warnings")
+                    suggestion_md = gr.Markdown(label="Suggested next action")
+                    with gr.Row():
                         suggest_btn = gr.Button("Suggested Next Action")
                         baseline_step_btn = gr.Button("Step Agent Once")
                         baseline_run_btn = gr.Button("Watch Baseline Agent")
+
+                with gr.Accordion("Debrief & Replay", open=False):
+                    debrief_html = gr.HTML(elem_classes=["dealroom-custom"])
+                    with gr.Row():
+                        diff_left = gr.Dropdown([], label="Left run")
+                        diff_right = gr.Dropdown([], label="Right run")
+                    diff_refresh_btn = gr.Button("Compare Runs")
+                    diff_html = gr.HTML(elem_classes=["dealroom-custom"])
+
+            with gr.Column(scale=6):
+                scenario_map_html = gr.HTML(elem_classes=["dealroom-custom"])
+                with gr.Row():
+                    with gr.Column(scale=5):
+                        timeline_html = gr.HTML(elem_classes=["dealroom-custom"])
+                    with gr.Column(scale=5):
+                        judge_lens_html = gr.HTML(elem_classes=["dealroom-custom"])
+                signals_html = gr.HTML(elem_classes=["dealroom-custom"])
 
                 with gr.Group():
                     gr.Markdown("### Quick Action")
@@ -1223,14 +1316,6 @@ def build_custom_tab(
                 with gr.Accordion("Advanced JSON", open=False):
                     advanced_json = gr.Code(language="json", value="{}", label="Raw action payload")
                     advanced_submit_btn = gr.Button("Submit JSON")
-
-            with gr.Tab("Debrief & Replay"):
-                debrief_html = gr.HTML(elem_classes=["dealroom-custom"])
-                with gr.Row():
-                    diff_left = gr.Dropdown([], label="Left run")
-                    diff_right = gr.Dropdown([], label="Right run")
-                    diff_refresh_btn = gr.Button("Compare Runs")
-                diff_html = gr.HTML(elem_classes=["dealroom-custom"])
 
         shared_outputs = [
             view_state,

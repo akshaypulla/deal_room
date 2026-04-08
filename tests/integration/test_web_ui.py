@@ -17,4 +17,4 @@ def test_web_page_exposes_playground_and_custom_tabs():
     body = response.text
     assert "Playground" in body
     assert "Custom" in body
-    assert "deal-room" in body.lower()
+    assert "dealroom" in body.lower()
