@@ -1,0 +1,82 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f1e21]:
+    - main [ref=f1e22]:
+      - generic [ref=f1e32]:
+        - heading "DealRoom" [level=1] [ref=f1e37]
+        - generic [ref=f1e38]:
+          - generic [ref=f1e39]:
+            - generic [ref=f1e40]:
+              - button [ref=f1e41] [cursor=pointer]: ⚽ Playground
+              - button [ref=f1e42] [cursor=pointer]: 🎓 Learn
+            - tablist [ref=f1e43]:
+              - tab "⚽ Playground" [ref=f1e44] [cursor=pointer]
+              - tab "🎓 Learn" [active] [selected] [ref=f1e45] [cursor=pointer]
+          - tabpanel [ref=f1e131]:
+            - generic [ref=f1e132]:
+              - generic [ref=f1e138]:
+                - heading "🎯 DealRoom" [level=1] [ref=f1e139]
+                - paragraph [ref=f1e140]: Negotiate with stakeholders • Close the deal
+              - generic [ref=f1e141]:
+                - generic [ref=f1e142]:
+                  - generic [ref=f1e144]:
+                    - generic [ref=f1e145]: Scenario
+                    - generic [ref=f1e148]:
+                      - listbox "Scenario" [ref=f1e149]: aligned
+                      - generic:
+                        - img
+                  - generic [ref=f1e151]:
+                    - generic [ref=f1e152]: Seed
+                    - spinbutton "Seed" [ref=f1e153]: "42"
+                - button "🔄 Reset" [ref=f1e154] [cursor=pointer]
+                - button "▶️ Auto Play" [ref=f1e155] [cursor=pointer]
+              - generic [ref=f1e160]:
+                - generic [ref=f1e161]: 🎯
+                - generic [ref=f1e162]: Press Reset to start
+              - heading "🎮 Actions" [level=3] [ref=f1e172]
+              - generic [ref=f1e174]:
+                - generic [ref=f1e176]:
+                  - generic [ref=f1e177]: Type
+                  - generic [ref=f1e180]:
+                    - listbox "Type" [ref=f1e181]: direct_message
+                    - generic:
+                      - img
+                - generic [ref=f1e183]:
+                  - generic [ref=f1e184]: To
+                  - generic [ref=f1e187]:
+                    - listbox "To" [ref=f1e188]: all
+                    - generic:
+                      - img
+              - generic [ref=f1e191]:
+                - generic [ref=f1e192]: Message
+                - textbox "Message" [ref=f1e194]:
+                  - /placeholder: Type your message...
+              - generic [ref=f1e195]:
+                - button "📤 Send" [ref=f1e196] [cursor=pointer]
+                - button "🗑️ Clear" [ref=f1e197] [cursor=pointer]
+              - generic [ref=f1e202]:
+                - generic [ref=f1e203]:
+                  - heading "🔴 Blockers" [level=4] [ref=f1e204]
+                  - generic [ref=f1e205]: None
+                - generic [ref=f1e206]:
+                  - heading "📋 Requests" [level=4] [ref=f1e207]
+                  - generic [ref=f1e208]: None requested
+              - generic [ref=f1e214]:
+                - generic [ref=f1e215]: "0.00"
+                - generic [ref=f1e216]: Final Score
+              - generic [ref=f1e219]: Ready - Click Reset to start
+              - generic [ref=f1e222]: None
+              - generic [ref=f1e225]: None requested
+              - generic [ref=f1e228]: "0.00"
+    - contentinfo "Gradio footer navigation" [ref=f1e23]:
+      - button "Use via API logo" [ref=f1e24] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f1e25]
+      - generic [ref=f1e26]: ·
+      - link "Built with Gradio logo" [ref=f1e27] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f1e28]
+      - generic [ref=f1e29]: ·
+      - button "Settings Settings" [ref=f1e30] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f1e31]

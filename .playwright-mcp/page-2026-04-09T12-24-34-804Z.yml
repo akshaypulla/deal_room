@@ -1,0 +1,142 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f3e4]:
+    - generic [ref=f3e21]:
+      - main [ref=f3e22]:
+        - generic [ref=f3e23]:
+          - heading "DealRoom" [level=1] [ref=f3e28]
+          - generic [ref=f3e29]:
+            - generic [ref=f3e30]:
+              - generic [ref=f3e31]:
+                - button [ref=f3e32] [cursor=pointer]: Playground
+                - button [ref=f3e33] [cursor=pointer]: Custom
+              - tablist [ref=f3e34]:
+                - tab "Playground" [ref=f3e35] [cursor=pointer]
+                - tab "Custom" [selected] [ref=f3e36] [cursor=pointer]
+            - tabpanel [ref=f3e156]:
+              - generic [ref=f3e157]:
+                - generic [ref=f3e163]:
+                  - heading "🎯 DealRoom" [level=1] [ref=f3e164]
+                  - paragraph [ref=f3e165]: Negotiate with stakeholders • Close the deal
+                - generic [ref=f3e166]:
+                  - generic [ref=f3e167]:
+                    - generic [ref=f3e169]:
+                      - generic [ref=f3e170]: Scenario
+                      - generic [ref=f3e173]:
+                        - listbox "Scenario" [ref=f3e174]: aligned
+                        - generic:
+                          - img
+                    - generic [ref=f3e176]:
+                      - generic [ref=f3e177]: Seed
+                      - spinbutton "Seed" [ref=f3e178]: "42"
+                  - button "🔄 Reset" [ref=f3e179] [cursor=pointer]
+                  - button "▶️ Auto Play" [active] [ref=f3e180] [cursor=pointer]
+                - generic [ref=f3e183]:
+                  - generic [ref=f3e268]:
+                    - button "Clear" [ref=f3e270] [cursor=pointer]:
+                      - img [ref=f3e272]
+                    - generic [ref=f3e276]: Error
+                  - generic [ref=f3e254]:
+                    - generic [ref=f3e255]:
+                      - generic [ref=f3e185]:
+                        - generic [ref=f3e186]: 💰
+                        - generic [ref=f3e187]: Jon (Fin
+                      - generic [ref=f3e256]:
+                        - generic [ref=f3e257]: 📦
+                        - generic [ref=f3e258]: Sofia (E
+                    - generic [ref=f3e259]: 🎯 Evaluation · ⏸️ Stalling
+                - generic [ref=f3e192]:
+                  - generic [ref=f3e277]:
+                    - button "Clear" [ref=f3e279] [cursor=pointer]:
+                      - img [ref=f3e281]
+                    - generic [ref=f3e285]: Error
+                  - generic [ref=f3e261]:
+                    - generic [ref=f3e262]:
+                      - generic [ref=f3e263]: finance
+                      - generic [ref=f3e264]: I need clarity on business impact and spend discipline before this can move.
+                    - generic [ref=f3e265]:
+                      - generic [ref=f3e266]: executive_sponsor
+                      - generic [ref=f3e267]: I care about political safety, momentum, and whether this can survive internal scrutiny.
+                - heading "🎮 Actions" [level=3] [ref=f3e197]
+                - generic [ref=f3e199]:
+                  - generic [ref=f3e201]:
+                    - generic [ref=f3e202]: Type
+                    - generic [ref=f3e205]:
+                      - listbox "Type" [ref=f3e206]: direct_message
+                      - generic:
+                        - img
+                  - generic [ref=f3e207]:
+                    - generic [ref=f3e286]:
+                      - button "Clear" [ref=f3e288] [cursor=pointer]:
+                        - img [ref=f3e290]
+                      - generic [ref=f3e294]: Error
+                    - generic [ref=f3e208]:
+                      - generic [ref=f3e209]: To
+                      - generic [ref=f3e212]:
+                        - listbox "To" [ref=f3e213]: all
+                        - generic:
+                          - img
+                - generic [ref=f3e216]:
+                  - generic [ref=f3e217]: Message
+                  - textbox "Message" [ref=f3e219]:
+                    - /placeholder: Type your message...
+                - generic [ref=f3e220]:
+                  - button "📤 Send" [ref=f3e221] [cursor=pointer]
+                  - button "🗑️ Clear" [ref=f3e222] [cursor=pointer]
+                - generic [ref=f3e227]:
+                  - generic [ref=f3e228]:
+                    - heading "🔴 Blockers" [level=4] [ref=f3e229]
+                    - generic [ref=f3e230]: None
+                  - generic [ref=f3e231]:
+                    - heading "📋 Requests" [level=4] [ref=f3e232]
+                    - generic [ref=f3e233]: None requested
+                - generic [ref=f3e239]:
+                  - generic [ref=f3e240]: "0.00"
+                  - generic [ref=f3e241]: Final Score
+                - generic [ref=f3e242]:
+                  - generic [ref=f3e295]:
+                    - button "Clear" [ref=f3e297] [cursor=pointer]:
+                      - img [ref=f3e299]
+                    - generic [ref=f3e303]: Error
+                  - generic [ref=f3e244]: Round 0/8 | 🏢 Aligned
+                - generic [ref=f3e245]:
+                  - generic [ref=f3e304]:
+                    - button "Clear" [ref=f3e306] [cursor=pointer]:
+                      - img [ref=f3e308]
+                    - generic [ref=f3e312]: Error
+                  - generic [ref=f3e247]: ✅ None
+                - generic [ref=f3e248]:
+                  - generic [ref=f3e313]:
+                    - button "Clear" [ref=f3e315] [cursor=pointer]:
+                      - img [ref=f3e317]
+                    - generic [ref=f3e321]: Error
+                  - generic [ref=f3e250]:
+                    - text: "📋 finance: roi_model, reference_case"
+                    - text: "📋 executive_sponsor: roi_model, implementation_timeline"
+                - generic [ref=f3e251]:
+                  - generic [ref=f3e322]:
+                    - button "Clear" [ref=f3e324] [cursor=pointer]:
+                      - img [ref=f3e326]
+                    - generic [ref=f3e330]: Error
+                  - generic [ref=f3e253]: "0.00"
+      - contentinfo "Gradio footer navigation" [ref=f3e141]:
+        - button "Use via API logo" [ref=f3e142] [cursor=pointer]:
+          - text: Use via API
+          - img "logo" [ref=f3e143]
+        - generic [ref=f3e144]: ·
+        - link "Built with Gradio logo" [ref=f3e145] [cursor=pointer]:
+          - /url: https://gradio.app
+          - text: Built with Gradio
+          - img "logo" [ref=f3e146]
+        - generic [ref=f3e147]: ·
+        - button "Settings Settings" [ref=f3e148] [cursor=pointer]:
+          - text: Settings
+          - img "Settings" [ref=f3e149]
+    - status [ref=f3e333]:
+      - button "Error Close" [ref=f3e334] [cursor=pointer]:
+        - img [ref=f3e336]
+        - generic [ref=f3e338]:
+          - generic [ref=f3e339]: Error
+          - img [ref=f3e341]
+        - button "Close" [ref=f3e343]:
+          - generic [ref=f3e344]: ×
+      - generic [ref=f3e347]: name 'WIZARD_STEPS' is not defined

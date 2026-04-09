@@ -286,3 +286,214 @@ Expected interpretation:
 - [server/scenarios.py](/Users/akshaypulla/Documents/deal_room/server/scenarios.py)
 - [server/semantics.py](/Users/akshaypulla/Documents/deal_room/server/semantics.py)
 - [inference.py](/Users/akshaypulla/Documents/deal_room/inference.py)
+
+---
+
+## API Reference
+
+### Core Classes
+
+#### `DealRoomEnvironment`
+The main OpenEnv-compatible RL environment class.
+
+```python
+from deal_room import DealRoomEnvironment
+
+env = DealRoomEnvironment()
+```
+
+**Methods:**
+- `reset(task_id: str, seed: int)` → `DealRoomObservation, DealRoomState`
+- `step(action: DealRoomAction)` → `DealRoomObservation, float, bool, dict, DealRoomState`
+- `close()` → None
+
+#### `DealRoomAction`
+The action object the agent sends to the environment.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `action_type` | `str` | One of 8 action families |
+| `target` | `str` | Target stakeholder or group |
+| `target_ids` | `list[str]` | Explicit recipient IDs |
+| `message` | `str` | Natural language negotiation move |
+| `documents` | `list[dict]` | Supporting artifacts |
+| `proposed_terms` | `dict\|null` | Structured commercial terms |
+| `channel` | `str` | Communication mode |
+| `mode` | `str` | Communication style |
+
+#### `DealRoomObservation`
+What the agent observes at each step.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `round_number` | `int` | Current round |
+| `max_rounds` | `int` | Episode budget |
+| `stakeholders` | `dict` | Active roster with role and authority |
+| `stakeholder_messages` | `dict` | Visible stakeholder replies |
+| `engagement_level` | `dict` | Noisy proxy for movement and support |
+| `weak_signals` | `dict` | Indirect hints about hidden blockers |
+| `known_constraints` | `list` | Constraints revealed to act on |
+| `requested_artifacts` | `dict` | Evidence being requested |
+| `approval_path_progress` | `dict` | Public approval band and authority |
+| `deal_momentum` | `str` | `progressing`, `stalling`, or `critical` |
+| `deal_stage` | `str` | Stage in the approval pipeline |
+| `active_blockers` | `list` | Stakeholders currently blocking |
+| `days_to_deadline` | `int` | Remaining time pressure |
+| `done` | `bool` | Whether episode has ended |
+
+#### `DealRoomState`
+Full state including hidden information (used by grader).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `stakeholder_private` | `dict` | Hidden trust/approval/resistance per stakeholder |
+| `hidden_constraints` | `dict` | Unrevealed feasibility constraints |
+| `relationship_edges` | `list` | Coalition/alliance dynamics |
+| `feasibility_state` | `dict` | Current term feasibility checks |
+
+### REST API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/metadata` | GET | Environment metadata |
+| `/reset` | POST | Reset environment with `task_id` and `seed` |
+| `/step` | POST | Send action, receive observation |
+| `/state` | GET | Get full internal state |
+| `/web` | GET | Open Gradio web interface |
+
+### Grading: Contract Closure Index (CCI)
+
+The CCIGrader computes a score in `[0, 1]` across 5 dimensions:
+
+| Component | Weight | Description |
+|-----------|--------|-------------|
+| `approval_completeness` | 40% | Weighted satisfaction with weakest-link penalty |
+| `constraint_satisfaction` | 20% | Hidden feasibility constraints resolved |
+| `term_feasibility` | 20% | Proposed terms pass feasibility checks |
+| `relationship_durability` | 10% | Trust floors maintained |
+| `efficiency` | 10% | Pacing relative to deadline |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Client / Agent                      │
+└──────────────────────────┬──────────────────────────────┘
+                           │ REST / OpenEnv API
+┌──────────────────────────▼──────────────────────────────┐
+│                     server/app.py                        │
+│                   FastAPI HTTP Wrapper                   │
+└──────────────────────────┬──────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────┐
+│           server/deal_room_environment.py                 │
+│               Main Environment Class                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │ Stakeholder │  │  Scenario   │  │  Commitment     │  │
+│  │  Engine     │  │  Generator  │  │  Ledger         │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │ CCIGrader   │  │  Semantic   │  │   Output       │  │
+│  │             │  │  Analyzer   │  │   Validator    │  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+└──────────────────────────┬──────────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────────┐
+│                   models.py / scenarios.py               │
+│           Pydantic Models + Task Configurations         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key design decisions:**
+- Zero LLM calls inside the `deal_room/` package — fully deterministic
+- Hidden state (`stakeholder_private`, `hidden_constraints`) is only revealed through observation proxies
+- Seeding guarantees reproducible episodes for RL training and evaluation
+- ClaimsTracker uses regex-only contradiction detection
+
+---
+
+## Troubleshooting
+
+### Environment fails to reset
+```
+ValueError: Unknown task_id 'xyz'. Valid: ['aligned', 'conflicted', 'hostile_acquisition']
+```
+**Fix:** Use a valid `task_id`. Run `python -c "from server.scenarios import SCENARIOS; print(list(SCENARIOS.keys()))"` to see available tasks.
+
+### High memory usage with long episodes
+The environment stores full message history per stakeholder. For very long episodes (>50 rounds), consider:
+```python
+# Truncate old messages when memory is a concern
+if len(observation.stakeholder_messages) > 100:
+    # Keep only last 50 entries
+    observation.stakeholder_messages = dict(list(observation.stakeholder_messages.items())[-50:])
+```
+
+### Stakeholder not responding
+Each stakeholder has a cooldown between responses. If a stakeholder stops responding:
+- Check `engagement_level` — low values indicate stakeholder is disengaging
+- Use `backchannel` action type to probe without escalating
+
+### Score is 0 despite deal appearing to close
+The grader checks hidden feasibility constraints. A deal can appear to progress while having unresolved hidden constraints. Check:
+- `known_constraints` in observation
+- `feasibility_state.violations` in state (via `/state` endpoint)
+
+### LLM baseline performs poorly
+The deterministic baseline policy (`_deterministic_policy_action`) is designed for evaluation, not performance. For better baseline performance:
+```python
+# Use inference.py with actual LLM
+python inference.py --task aligned --seed 42 --llm openai
+```
+
+---
+
+## Bonus Design Decisions
+
+### Why partial observability?
+Real enterprise negotiations involve:
+- Unknown internal priorities
+- Hidden approval thresholds
+- Unstated constraints until evidence is requested
+
+The environment models this through:
+- `weak_signals` — ambiguous hints requiring interpretation
+- `hidden_constraints` — only revealed after correct evidence
+- `engagement_level` — noisy proxy, not exact satisfaction
+
+### Why deterministic grading?
+RL training requires reproducible signals. The CCI grade is computed from:
+- Exact constraint resolution state (not estimated)
+- Exact stakeholder approval bands (not noisy)
+- Exact term feasibility checks (not probabilistic)
+
+This means two agents with identical trajectories get identical scores.
+
+### Why 8 action types?
+Enterprise negotiation requires more than "send message". The 8 types map to:
+1. **direct_message** — Targeted persuasion
+2. **backchannel** — Quiet signal gathering
+3. **send_document** — Evidence provision (often prerequisite for approval)
+4. **group_proposal** — Formal term negotiation
+5. **concession** — Offering ground on non-critical terms
+6. **walkaway_signal** — Pressure tactic (risky)
+7. **reframe_value_prop** — Repositioning for a role or coalition
+8. **exec_escalation** — High-pressure authority move
+
+### Why multiple stakeholder utility functions?
+Different roles optimize for different things:
+- Finance → cost minimization + ROI
+- Legal → compliance coverage + liability limits
+- Technical → timeline feasibility + integration fit
+- Operations → delivery commitments + support coverage
+- Procurement → process compliance + risk transfer
+
+The environment tracks these separately and the grader weights them by deal stage.
+
+### Reward shaping strategy
+Dense reward is provided at each step, but terminal grading is what matters. Key insight:
+- Dense reward guides learning (progress signals)
+- Terminal grade enforces feasibility (can't substitute soft signals for hard constraints)

@@ -1,0 +1,212 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f1e21]:
+    - main [ref=f1e22]:
+      - generic [ref=f1e23]:
+        - heading "DealRoom" [level=1] [ref=f1e28]
+        - generic [ref=f1e29]:
+          - generic [ref=f1e30]:
+            - generic [ref=f1e31]:
+              - button [ref=f1e32] [cursor=pointer]: Playground
+              - button [ref=f1e33] [cursor=pointer]: Custom
+            - tablist [ref=f1e34]:
+              - tab "Playground" [ref=f1e35] [cursor=pointer]
+              - tab "Custom" [selected] [ref=f1e36] [cursor=pointer]
+          - tabpanel [ref=f1e149]:
+            - generic [ref=f1e150]:
+              - paragraph [ref=f1e360]: Step 8 processed. Reward 0.01. Episode complete.
+              - generic [ref=f1e158]:
+                - generic [ref=f1e159]:
+                  - generic [ref=f1e162]:
+                    - generic [ref=f1e163]:
+                      - heading "DealRoom Learning Console" [level=1] [ref=f1e164]
+                      - paragraph [ref=f1e165]: Move from a simple seeded committee to the full enterprise negotiation lab. Each stage reveals why more realism requires more state, more uncertainty, and more careful sequencing.
+                      - generic [ref=f1e166]: dynamic stakeholdershidden constraintsrelationship propagationirreversible mistakesdeterministic grading
+                      - generic [ref=f1e167]: partial observabilitydelayed rewardlanguage-sensitive dynamicslong-horizon planning
+                      - generic [ref=f1e168]:
+                        - generic [ref=f1e169]:
+                          - strong [ref=f1e170]: Step 1 · Simple
+                          - paragraph [ref=f1e171]: Minimal example with one seed parameter
+                        - generic [ref=f1e172]:
+                          - strong [ref=f1e173]: Step 2 · Why It's Limited
+                          - paragraph [ref=f1e174]: What's missing in the simple setup
+                        - generic [ref=f1e175]:
+                          - strong [ref=f1e176]: Step 3 · Medium
+                          - paragraph [ref=f1e177]: Coalitions, constraints, and sequencing
+                        - generic [ref=f1e178]:
+                          - strong [ref=f1e179]: Step 4 · Still Not Real
+                          - paragraph [ref=f1e180]: Remaining gaps before real-world
+                        - generic [ref=f1e181]:
+                          - strong [ref=f1e182]: Step 5 · Hard Lab
+                          - paragraph [ref=f1e183]: Full realism with all parameters
+                    - generic [ref=f1e184]:
+                      - generic [ref=f1e185]:
+                        - heading "How to use this page" [level=3] [ref=f1e186]
+                        - list [ref=f1e187]:
+                          - listitem [ref=f1e188]: Run the simple example first to see the minimum viable negotiation loop.
+                          - listitem [ref=f1e189]: Walk through the medium scenario to understand hidden constraints and coalition effects.
+                          - listitem [ref=f1e190]: Use the hard lab to test realistic moves, then inspect the judge lens and debrief.
+                        - paragraph [ref=f1e191]: Nothing in the Playground changes. This custom page is the educational layer on top of the same environment.
+                      - generic [ref=f1e192]:
+                        - heading "Current session" [level=3] [ref=f1e193]
+                        - paragraph [ref=f1e194]: Task Aligned · seed 42 · source baseline
+                        - paragraph [ref=f1e195]: Step 8 processed. Reward 0.01. Episode complete.
+                      - generic [ref=f1e196]:
+                        - heading "Why this environment is not a toy" [level=3] [ref=f1e197]
+                        - list [ref=f1e198]:
+                          - listitem [ref=f1e199]: Dynamic 2–4 stakeholder roster per episode.
+                          - listitem [ref=f1e200]: 1–2 hidden hard constraints that must be inferred and resolved.
+                          - listitem [ref=f1e201]: Deterministic seeding and terminal grading.
+                          - listitem [ref=f1e202]: Dense reward helps learning, but cannot substitute for feasible closure.
+                      - generic [ref=f1e203]:
+                        - heading "Recommended path" [level=3] [ref=f1e204]
+                        - paragraph [ref=f1e205]: 1. Walk through the seeded demo. 2. Take over manually. 3. Compare the result against the baseline agent or a bad move run.
+                  - generic [ref=f1e206]:
+                    - generic [ref=f1e210]:
+                      - generic [ref=f1e211]: 1 Simple
+                      - generic [ref=f1e212]: 2 Why Limited
+                      - generic [ref=f1e213]: 3 Medium
+                      - generic [ref=f1e214]: 4 Still Not Real
+                      - generic [ref=f1e215]: 5 Hard Lab
+                    - generic [ref=f1e218]:
+                      - 'heading "Step 1: Simple Environment" [level=3] [ref=f1e332]'
+                      - paragraph [ref=f1e337]: "Start with the easiest seeded committee. This shows the smallest realistic loop: one hidden blocker, a short approval chain, and enough signal to learn what the environment returns."
+                      - generic [ref=f1e341]:
+                        - generic [ref=f1e342]: What is happening?
+                        - paragraph [ref=f1e343]:
+                          - text: The
+                          - strong [ref=f1e344]: seed
+                          - text: parameter controls which specific scenario instance is generated. Same seed = same committee, same constraints, same dynamics. This is essential for reproducible RL training.
+                      - generic [ref=f1e236]:
+                        - generic [ref=f1e346]:
+                          - generic [ref=f1e347]: Seed
+                          - generic [ref=f1e348]: Determines which scenario instance runs
+                          - spinbutton "Seed" [ref=f1e349]: "42"
+                        - button "Run Simple Example" [active] [ref=f1e243] [cursor=pointer]
+                      - generic [ref=f1e353]:
+                        - generic [ref=f1e354]: What to observe
+                        - paragraph [ref=f1e355]:
+                          - text: Watch the
+                          - strong [ref=f1e356]: stakeholder map
+                          - text: ","
+                          - strong [ref=f1e357]: requested artifacts
+                          - text: ","
+                          - strong [ref=f1e358]: step log
+                          - text: ", and"
+                          - strong [ref=f1e359]: final score
+                          - text: . In the simple setup, one correct artifact sequence can resolve everything.
+                    - generic [ref=f1e254]:
+                      - button "Previous" [ref=f1e255] [cursor=pointer]
+                      - button "Next" [ref=f1e256] [cursor=pointer]
+                  - button "Debrief & Replay Diff ▼" [ref=f1e258] [cursor=pointer]:
+                    - generic [ref=f1e259]: Debrief & Replay Diff
+                    - generic [ref=f1e260]: ▼
+                - generic [ref=f1e261]:
+                  - heading "Results & Explanations" [level=2] [ref=f1e266]
+                  - generic [ref=f1e270]:
+                    - heading "Aligned · seed 42" [level=3] [ref=f1e361]
+                    - paragraph [ref=f1e362]: Low-friction committee where sequencing and feasibility discipline still matter.
+                    - generic [ref=f1e363]: evaluationnegotiationlegal_reviewfinal_approvalclosed
+                    - generic [ref=f1e364]: momentum stallingdeadline 24 daysblockers none
+                    - generic [ref=f1e365]:
+                      - generic [ref=f1e366]:
+                        - heading "Jon (Finance Lead)" [level=4] [ref=f1e367]
+                        - generic [ref=f1e368]: financeauthority 0.92supportermandatory
+                        - paragraph [ref=f1e369]: No visible message yet.
+                      - generic [ref=f1e370]:
+                        - heading "Sofia (Executive Sponsor)" [level=4] [ref=f1e371]
+                        - generic [ref=f1e372]: executive_sponsorauthority 0.95supporter
+                        - paragraph [ref=f1e373]: The internal case is becoming easier to sponsor. Keep reducing risk and ambiguity.
+                  - generic [ref=f1e272]:
+                    - generic [ref=f1e273]:
+                      - heading "Interaction Log" [level=3] [ref=f1e278]
+                      - generic [ref=f1e281]:
+                        - generic [ref=f1e282]:
+                          - heading "Reset · Aligned · seed 42" [level=4] [ref=f1e374]
+                          - paragraph [ref=f1e375]: Stage evaluation · Blockers none
+                        - generic [ref=f1e376]:
+                          - heading "Step 1 · send_document" [level=4] [ref=f1e377]
+                          - paragraph [ref=f1e378]: Reward 0.12 · Stage negotiation · Targets finance
+                          - generic [ref=f1e379]: "Here is the ROI model with explicit payback assumptions and downside cases. Documents: roi_model"
+                        - generic [ref=f1e380]:
+                          - heading "Step 2 · send_document" [level=4] [ref=f1e381]
+                          - paragraph [ref=f1e382]: Reward 0.08 · Stage legal_review · Targets finance
+                          - generic [ref=f1e383]: "Here is a reference case from a comparable deployment with measurable outcomes. Documents: reference_case"
+                        - generic [ref=f1e384]:
+                          - heading "Step 3 · send_document" [level=4] [ref=f1e385]
+                          - paragraph [ref=f1e386]: Reward 0.06 · Stage final_approval · Targets executive_sponsor
+                          - generic [ref=f1e387]: "Here is the ROI model with explicit payback assumptions and downside cases. Documents: roi_model"
+                        - generic [ref=f1e388]:
+                          - heading "Step 4 · send_document" [level=4] [ref=f1e389]
+                          - paragraph [ref=f1e390]: Reward 0.03 · Stage final_approval · Targets executive_sponsor
+                          - generic [ref=f1e391]: "Here is the implementation timeline with milestones, owners, and delivery guardrails. Documents: implementation_timeline"
+                        - generic [ref=f1e392]:
+                          - heading "Step 5 · direct_message" [level=4] [ref=f1e393]
+                          - paragraph [ref=f1e394]: Reward 0.00 · Stage final_approval · Targets executive_sponsor
+                          - generic [ref=f1e395]: What internal approval risk do we need to de-risk before this is safe to sponsor?
+                        - generic [ref=f1e396]:
+                          - heading "Step 6 · direct_message" [level=4] [ref=f1e397]
+                          - paragraph [ref=f1e398]: Reward 0.00 · Stage final_approval · Targets executive_sponsor
+                          - generic [ref=f1e399]: What internal approval risk do we need to de-risk before this is safe to sponsor?
+                        - generic [ref=f1e400]:
+                          - heading "Step 7 · direct_message" [level=4] [ref=f1e401]
+                          - paragraph [ref=f1e402]: Reward 0.00 · Stage final_approval · Targets executive_sponsor
+                          - generic [ref=f1e403]: What internal approval risk do we need to de-risk before this is safe to sponsor?
+                        - generic [ref=f1e404]:
+                          - heading "Step 8 · direct_message" [level=4] [ref=f1e405]
+                          - paragraph [ref=f1e406]: Reward 0.01 · Stage final_approval · Targets executive_sponsor
+                          - generic [ref=f1e407]: What internal approval risk do we need to de-risk before this is safe to sponsor?
+                    - generic [ref=f1e283]:
+                      - heading "Judge Lens" [level=3] [ref=f1e288]
+                      - generic [ref=f1e292]:
+                        - heading "Judge lens" [level=3] [ref=f1e408]
+                        - generic [ref=f1e409]:
+                          - generic [ref=f1e410]:
+                            - strong [ref=f1e411]: Observable state
+                            - paragraph [ref=f1e412]:
+                              - text: Stage final_approval
+                              - text: Blockers none
+                              - text: Known constraints budget_ceiling
+                          - generic [ref=f1e413]:
+                            - strong [ref=f1e414]: Hidden state view
+                            - paragraph [ref=f1e415]:
+                              - text: Hidden constraints budget_ceiling
+                              - text: Relationship edges []
+                              - text: Feasibility violations unresolved_constraints
+                        - heading "Constraint confidence" [level=4] [ref=f1e416]
+                        - generic [ref=f1e417]:
+                          - strong [ref=f1e418]: Budget Ceiling
+                          - paragraph [ref=f1e419]: status known · confidence high
+                        - heading "Reward breakdown" [level=4] [ref=f1e420]
+                        - generic [ref=f1e421]: No dense reward milestones on the latest step.
+                        - heading "Relationship effects" [level=4] [ref=f1e422]
+                        - generic [ref=f1e423]: No relationship propagation on the latest step.
+                        - heading "Mistake tracker" [level=4] [ref=f1e424]
+                        - generic [ref=f1e425]: No tracked mistakes in this run.
+                  - heading "Signals & Missing Evidence" [level=3] [ref=f1e298]
+                  - generic [ref=f1e302]:
+                    - generic [ref=f1e426]:
+                      - heading "Weak signals" [level=4] [ref=f1e427]
+                      - generic [ref=f1e428]:
+                        - strong [ref=f1e429]: finance
+                        - paragraph [ref=f1e430]: Replies have become noticeably shorter.
+                    - generic [ref=f1e431]:
+                      - heading "Requested artifacts" [level=4] [ref=f1e432]
+                      - generic [ref=f1e433]:
+                        - strong [ref=f1e434]: finance
+                        - paragraph [ref=f1e435]: No pending artifacts
+                      - generic [ref=f1e436]:
+                        - strong [ref=f1e437]: executive_sponsor
+                        - paragraph [ref=f1e438]: No pending artifacts
+    - contentinfo "Gradio footer navigation" [ref=f1e140]:
+      - button "Use via API logo" [ref=f1e141] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f1e142]
+      - generic [ref=f1e143]: ·
+      - link "Built with Gradio logo" [ref=f1e144] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f1e145]
+      - generic [ref=f1e146]: ·
+      - button "Settings Settings" [ref=f1e147] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f1e148]

@@ -1,0 +1,93 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f5e21]:
+    - main [ref=f5e22]:
+      - generic [ref=f5e23]:
+        - heading "DealRoom" [level=1] [ref=f5e37]
+        - generic [ref=f5e38]:
+          - generic [ref=f5e39]:
+            - generic [ref=f5e40]:
+              - button [ref=f5e41] [cursor=pointer]: Playground
+              - button [ref=f5e42] [cursor=pointer]: Custom
+            - tablist [ref=f5e43]:
+              - tab "Playground" [ref=f5e44] [cursor=pointer]
+              - tab "Custom" [selected] [ref=f5e45] [cursor=pointer]
+          - tabpanel [ref=f5e150]:
+            - generic [ref=f5e151]:
+              - generic [ref=f5e157]:
+                - heading "🎯 DealRoom" [level=1] [ref=f5e158]
+                - paragraph [ref=f5e159]: Negotiate with stakeholders • Close the deal
+              - generic [ref=f5e160]:
+                - generic [ref=f5e161]:
+                  - generic [ref=f5e163]:
+                    - generic [ref=f5e164]: Scenario
+                    - generic [ref=f5e167]:
+                      - listbox "Scenario" [ref=f5e168]: aligned
+                      - generic:
+                        - img
+                  - generic [ref=f5e170]:
+                    - generic [ref=f5e171]: Seed
+                    - spinbutton "Seed" [ref=f5e172]: "42"
+                - button "🔄 Reset" [ref=f5e173] [cursor=pointer]
+                - button "▶️ Auto Play" [active] [ref=f5e174] [cursor=pointer]
+              - generic [ref=f5e248]:
+                - generic [ref=f5e249]:
+                  - generic [ref=f5e179]:
+                    - generic [ref=f5e180]: 💰
+                    - generic [ref=f5e181]: Jon (Fin
+                  - generic [ref=f5e250]:
+                    - generic [ref=f5e251]: 📦
+                    - generic [ref=f5e252]: Sofia (E
+                - generic [ref=f5e253]: 📝 Negotiation · ⬆️ Progressing
+              - generic [ref=f5e256]:
+                - generic [ref=f5e257]: finance
+                - generic [ref=f5e258]: I can see the outline, but I still need more confidence on spend and downside protection. I still ne...
+              - heading "🎮 Actions" [level=3] [ref=f5e191]
+              - generic [ref=f5e193]:
+                - generic [ref=f5e195]:
+                  - generic [ref=f5e196]: Type
+                  - generic [ref=f5e199]:
+                    - listbox "Type" [ref=f5e200]: direct_message
+                    - generic:
+                      - img
+                - generic [ref=f5e202]:
+                  - generic [ref=f5e203]: To
+                  - generic [ref=f5e206]:
+                    - listbox "To" [ref=f5e207]: all
+                    - generic:
+                      - img
+              - generic [ref=f5e210]:
+                - generic [ref=f5e211]: Message
+                - textbox "Message" [ref=f5e213]:
+                  - /placeholder: Type your message...
+              - generic [ref=f5e214]:
+                - button "📤 Send" [ref=f5e215] [cursor=pointer]
+                - button "🗑️ Clear" [ref=f5e216] [cursor=pointer]
+              - generic [ref=f5e221]:
+                - generic [ref=f5e222]:
+                  - heading "🔴 Blockers" [level=4] [ref=f5e223]
+                  - generic [ref=f5e224]: None
+                - generic [ref=f5e225]:
+                  - heading "📋 Requests" [level=4] [ref=f5e226]
+                  - generic [ref=f5e227]: None requested
+              - generic [ref=f5e233]:
+                - generic [ref=f5e234]: "0.00"
+                - generic [ref=f5e235]: Final Score
+              - generic [ref=f5e238]: Round 0/8 | 🏢 Aligned
+              - generic [ref=f5e241]: ✅ None
+              - generic [ref=f5e244]:
+                - text: "📋 finance: reference_case"
+                - text: "📋 executive_sponsor: roi_model, implementation_timeline"
+              - generic [ref=f5e247]: "0.01"
+    - contentinfo "Gradio footer navigation" [ref=f5e24]:
+      - button "Use via API logo" [ref=f5e25] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f5e26]
+      - generic [ref=f5e27]: ·
+      - link "Built with Gradio logo" [ref=f5e28] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f5e29]
+      - generic [ref=f5e30]: ·
+      - button "Settings Settings" [ref=f5e31] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f5e32]

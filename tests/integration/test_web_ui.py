@@ -28,3 +28,20 @@ def test_web_slash_page_exposes_same_wrapper():
     body = response.text
     assert "iframe" in body.lower()
     assert "/ui/" in body
+
+
+def test_ui_shell_contains_custom_round_table_labels():
+    client = TestClient(app)
+    response = client.get("/ui/")
+    assert response.status_code == 200
+    body = response.text
+    assert "Playground" in body
+    assert "Custom" in body
+    assert "Quick Start" in body
+    assert "Raw JSON response" in body
+    assert "Move Type" in body
+    assert "Get state" in body
+    assert "DealRoom Custom Lab" in body
+    assert "Simple Round" in body
+    assert "Medium Round" in body
+    assert "Hard Round" in body

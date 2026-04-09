@@ -1,0 +1,118 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f3e21]:
+    - main [ref=f3e22]:
+      - generic [ref=f3e23]:
+        - heading "DealRoom" [level=1] [ref=f3e28]
+        - generic [ref=f3e29]:
+          - generic [ref=f3e30]:
+            - generic [ref=f3e31]:
+              - button [ref=f3e32] [cursor=pointer]: Playground
+              - button [ref=f3e33] [cursor=pointer]: Custom
+            - tablist [ref=f3e34]:
+              - tab "Playground" [selected] [ref=f3e35] [cursor=pointer]
+              - tab "Custom" [ref=f3e36] [cursor=pointer]
+          - tabpanel [ref=f3e37]:
+            - generic [ref=f3e38]:
+              - heading "DealRoom Negotiation Environment" [level=1] [ref=f3e43]
+              - heading "OpenEnv-compatible multi-stakeholder enterprise negotiation simulator" [level=3] [ref=f3e48]
+              - generic [ref=f3e49]:
+                - generic [ref=f3e50]:
+                  - generic [ref=f3e51]:
+                    - generic [ref=f3e53]:
+                      - generic [ref=f3e54]: Scenario
+                      - generic [ref=f3e55]: Choose the negotiation scenario
+                      - generic [ref=f3e58]:
+                        - listbox "Scenario" [ref=f3e59]: aligned
+                        - generic:
+                          - img
+                    - generic [ref=f3e61]:
+                      - generic [ref=f3e62]: Seed
+                      - generic [ref=f3e63]: Random seed for reproducibility
+                      - spinbutton "Seed" [ref=f3e64]: "42"
+                  - button "Reset Environment" [ref=f3e66] [cursor=pointer]
+                  - heading "Action Configuration" [level=3] [ref=f3e71]
+                  - generic [ref=f3e72]:
+                    - generic [ref=f3e74]:
+                      - generic [ref=f3e75]: Action Type
+                      - generic [ref=f3e78]:
+                        - listbox "Action Type" [ref=f3e79]: direct_message
+                        - generic:
+                          - img
+                    - generic [ref=f3e81]:
+                      - generic [ref=f3e82]: Target
+                      - generic [ref=f3e83]: Stakeholder(s) to address
+                      - textbox "Target Stakeholder(s) to address" [ref=f3e85]:
+                        - /placeholder: ""
+                        - text: all
+                    - generic [ref=f3e87]:
+                      - generic [ref=f3e88]: Message
+                      - textbox "Message" [ref=f3e90]:
+                        - /placeholder: ""
+                        - text: Thank you for your time. I appreciate your consideration.
+                  - generic [ref=f3e91]:
+                    - button "Submit Action" [ref=f3e92] [cursor=pointer]
+                    - button "Clear Message" [ref=f3e93] [cursor=pointer]
+                - generic [ref=f3e94]:
+                  - generic [ref=f3e98]:
+                    - heading "Output" [level=3] [ref=f3e99]
+                    - paragraph [ref=f3e100]:
+                      - emphasis [ref=f3e101]: Reset the environment to begin
+                  - generic [ref=f3e104]:
+                    - generic [ref=f3e105]: State Info
+                    - textbox "State Info" [disabled] [ref=f3e107]:
+                      - /placeholder: ""
+              - button "Get State" [ref=f3e108] [cursor=pointer]
+              - generic [ref=f3e112]:
+                - separator [ref=f3e113]
+                - heading "Usage Instructions:" [level=3] [ref=f3e114]
+                - list [ref=f3e115]:
+                  - listitem [ref=f3e116]: Select a scenario and seed
+                  - listitem [ref=f3e117]:
+                    - text: Click
+                    - strong [ref=f3e118]: Reset Environment
+                    - text: to start
+                  - listitem [ref=f3e119]: Configure your action (type, target, message)
+                  - listitem [ref=f3e120]:
+                    - text: Click
+                    - strong [ref=f3e121]: Submit Action
+                    - text: to take a turn
+                  - listitem [ref=f3e122]: Monitor stakeholder responses and adjust strategy
+                - heading "Action Types:" [level=3] [ref=f3e123]
+                - list [ref=f3e124]:
+                  - listitem [ref=f3e125]:
+                    - strong [ref=f3e126]: direct_message
+                    - text: ": Standard communication"
+                  - listitem [ref=f3e127]:
+                    - strong [ref=f3e128]: send_document
+                    - text: ": Share documents (ROI, compliance, etc.)"
+                  - listitem [ref=f3e129]:
+                    - strong [ref=f3e130]: backchannel
+                    - text: ": Informal check-in"
+                  - listitem [ref=f3e131]:
+                    - strong [ref=f3e132]: group_proposal
+                    - text: ": Proposal to all stakeholders"
+                  - listitem [ref=f3e133]:
+                    - strong [ref=f3e134]: concession
+                    - text: ": Offer terms"
+                  - listitem [ref=f3e135]:
+                    - strong [ref=f3e136]: walkaway_signal
+                    - text: ": Signal potential deal failure"
+                  - listitem [ref=f3e137]:
+                    - strong [ref=f3e138]: reframe_value_prop
+                    - text: ": Reframe value proposition"
+                  - listitem [ref=f3e139]:
+                    - strong [ref=f3e140]: exec_escalation
+                    - text: ": Escalate to leadership"
+    - contentinfo "Gradio footer navigation" [ref=f3e141]:
+      - button "Use via API logo" [ref=f3e142] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f3e143]
+      - generic [ref=f3e144]: ·
+      - link "Built with Gradio logo" [ref=f3e145] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f3e146]
+      - generic [ref=f3e147]: ·
+      - button "Settings Settings" [ref=f3e148] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f3e149]

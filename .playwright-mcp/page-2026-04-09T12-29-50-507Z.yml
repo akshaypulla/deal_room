@@ -1,0 +1,20 @@
+- iframe [ref=e2]:
+  - generic [ref=f5e4]:
+    - generic [ref=f5e5]:
+      - img [ref=f5e9]
+      - paragraph [ref=f5e20]: Loading...
+    - generic [ref=f5e21]:
+      - main [ref=f5e22]
+      - contentinfo "Gradio footer navigation" [ref=f5e24]:
+        - button "Use via API logo" [ref=f5e25] [cursor=pointer]:
+          - text: Use via API
+          - img "logo" [ref=f5e26]
+        - generic [ref=f5e27]: ·
+        - link "Built with Gradio logo" [ref=f5e28] [cursor=pointer]:
+          - /url: https://gradio.app
+          - text: Built with Gradio
+          - img "logo" [ref=f5e29]
+        - generic [ref=f5e30]: ·
+        - button "Settings Settings" [ref=f5e31] [cursor=pointer]:
+          - text: Settings
+          - img "Settings" [ref=f5e32]
