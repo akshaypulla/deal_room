@@ -5,20 +5,21 @@ Thin HTTP wrapper only. Zero business logic. All logic in deal_room/.
 
 import os
 from typing import Optional
-from fastapi import FastAPI, HTTPException
+
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from models import DealRoomAction
-from server.deal_room_environment import DealRoomEnvironment
+from server.session_pool import DealRoomSessionPool, SESSION_COOKIE_NAME
 
 app = FastAPI(title="DealRoom", version="1.0.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
-_env = DealRoomEnvironment()
+_sessions = DealRoomSessionPool()
 
 
 def _web_shell_html() -> str:
@@ -83,6 +84,32 @@ class ResetRequest(BaseModel):
     episode_id: Optional[str] = None
 
 
+def _resolve_session_id(
+    request: Request,
+    explicit_session_id: Optional[str] = None,
+    action: Optional[DealRoomAction] = None,
+) -> Optional[str]:
+    metadata = action.metadata if action else {}
+    return (
+        explicit_session_id
+        or metadata.get("session_id")
+        or metadata.get("episode_id")
+        or request.headers.get("x-session-id")
+        or request.query_params.get("session_id")
+        or request.cookies.get(SESSION_COOKIE_NAME)
+    )
+
+
+def _set_session_cookie(response: Response, session_id: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        session_id,
+        max_age=60 * 60 * 6,
+        httponly=False,
+        samesite="lax",
+    )
+
+
 @app.get("/health")
 async def health():
     return {
@@ -102,9 +129,20 @@ async def metadata():
 
 
 @app.post("/reset")
-async def reset(req: ResetRequest = ResetRequest()):
+async def reset(
+    request: Request,
+    response: Response,
+    req: ResetRequest = ResetRequest(),
+):
     try:
-        obs = _env.reset(seed=req.seed, task_id=req.task_id, episode_id=req.episode_id)
+        session_id = _resolve_session_id(request, explicit_session_id=req.episode_id)
+        session_id, obs, _state = _sessions.reset(
+            seed=req.seed,
+            task_id=req.task_id or "aligned",
+            session_id=session_id,
+        )
+        obs.metadata["session_id"] = session_id
+        _set_session_cookie(response, session_id)
         return obs.model_dump()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -113,23 +151,41 @@ async def reset(req: ResetRequest = ResetRequest()):
 
 
 @app.post("/step")
-async def step(action: DealRoomAction):
+async def step(request: Request, response: Response, action: DealRoomAction):
     try:
-        obs, reward, done, info = _env.step(action)
+        session_id = _resolve_session_id(request, action=action)
+        if not session_id or not _sessions.has_session(session_id):
+            raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
+        obs, reward, done, info, _state = _sessions.step(session_id, action)
+        info["session_id"] = session_id
+        obs.metadata["session_id"] = session_id
+        _set_session_cookie(response, session_id)
         return {
             "observation": obs.model_dump(),
             "reward": reward,
             "done": done,
             "info": info,
         }
+    except HTTPException:
+        raise
+    except KeyError:
+        raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Step failed: {e}")
 
 
 @app.get("/state")
-async def state():
+async def state(request: Request, response: Response, session_id: Optional[str] = Query(default=None)):
     try:
-        return _env.state.model_dump()
+        resolved_session_id = _resolve_session_id(request, explicit_session_id=session_id)
+        if not resolved_session_id or not _sessions.has_session(resolved_session_id):
+            raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
+        _set_session_cookie(response, resolved_session_id)
+        return _sessions.state(resolved_session_id).model_dump()
+    except HTTPException:
+        raise
+    except KeyError:
+        raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"State failed: {e}")
 
@@ -147,7 +203,7 @@ def _setup_gradio_ui():
         import gradio as gr
         from server.gradio_standalone import create_dealroom_gradio_app
 
-        _gradio_app = create_dealroom_gradio_app()
+        _gradio_app = create_dealroom_gradio_app(_sessions)
         app = gr.mount_gradio_app(app, _gradio_app, path="/ui")
         return True
     except ImportError as e:
@@ -175,7 +231,7 @@ def _setup_gradio_ui():
         )
 
         _metadata = load_metadata()
-        _web_manager = DealRoomWebManager(_env, _metadata)
+        _web_manager = DealRoomWebManager(_sessions, _metadata)
         _action_fields = _extract_action_fields(DealRoomAction)
         _playground = build_gradio_app(
             _web_manager,

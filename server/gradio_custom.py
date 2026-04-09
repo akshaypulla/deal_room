@@ -10,9 +10,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import gradio as gr
 from openenv.core.env_server.types import EnvironmentMetadata
 
-from models import DealRoomAction, DealRoomObservation
-from server.deal_room_environment import DealRoomEnvironment
+from models import DealRoomAction, DealRoomObservation, DealRoomState
 from server.grader import CCIGrader
+from server.session_pool import DealRoomSessionPool
 from server.walkthrough_data import GUIDE_DATA
 
 TASK_ORDER = ["aligned", "conflicted", "hostile_acquisition"]
@@ -39,6 +39,39 @@ RL_CHIPS = [
     "language-sensitive dynamics",
     "long-horizon planning",
 ]
+LEARNING_STEPS = [
+    ("1", "Simple", "Minimal committee, one hidden blocker, easy to run."),
+    ("2", "Medium", "Coalitions and approval drag make sequencing matter."),
+    ("3", "Hard", "Compressed timelines, authority shifts, and multi-party risk."),
+]
+SIMPLE_LIMITATIONS_MD = """
+### Why the simple version is still not realistic enough
+
+- Only a small committee is active, so coalition effects are limited.
+- There is usually a single dominant blocker, which makes diagnosis easier than real procurement.
+- The agent can succeed with disciplined sequencing, but it is not yet dealing with cross-functional conflict.
+"""
+MEDIUM_EXPLANATION_MD = """
+### What changed in the medium environment?
+
+- More stakeholders enter the loop, so the agent can no longer treat the deal like a one-thread conversation.
+- Relationship edges matter: one team can quietly reinforce or undermine another.
+- New parameters appear because real negotiation is not just about terms; it is about internal approval choreography.
+"""
+MEDIUM_LIMITATIONS_MD = """
+### Why the medium version is still short of the real world
+
+- It introduces coalitions and approval drag, but still keeps the number of hidden constraints bounded.
+- Time pressure exists, but not yet with the full severity of post-acquisition or crisis conditions.
+- Recovery is harder than in the simple case, but still more forgiving than a truly adversarial enterprise process.
+"""
+HARD_EXPLANATION_MD = """
+### Why the hard environment is close to real-world dynamics
+
+- Multiple stakeholders can each block progress for different reasons.
+- Hidden constraints interact with sequencing, credibility, and relationship damage.
+- Time pressure, irreversible marks, and feasibility checks mean a single wrong move can poison later rounds.
+"""
 STAGE_ORDER = ["evaluation", "negotiation", "legal_review", "final_approval", "closed"]
 CUSTOM_CSS = """
 #dealroom-classic-root {
@@ -154,6 +187,23 @@ CUSTOM_CSS = """
 #dealroom-classic-root .stage-rail {
   display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0;
 }
+#dealroom-classic-root .learning-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+#dealroom-classic-root .learning-step {
+  padding: 12px;
+  border-radius: 10px;
+  background: #10161d;
+  border: 1px solid #283240;
+}
+#dealroom-classic-root .learning-step strong {
+  display: block;
+  color: #f3f4f6;
+  margin-bottom: 6px;
+}
 #dealroom-classic-root .stage-pill {
   padding: 6px 10px;
   border-radius: 999px;
@@ -225,32 +275,69 @@ CUSTOM_CSS = """
 class DealRoomWebManager:
     """Minimal manager that lets the stock OpenEnv playground drive our env."""
 
-    def __init__(self, env: DealRoomEnvironment, metadata: EnvironmentMetadata):
-        self.env = env
+    def __init__(self, pool: DealRoomSessionPool, metadata: EnvironmentMetadata):
+        self.pool = pool
         self.metadata = metadata
+        self._playground_session_id: Optional[str] = None
+
+    def reset_session(
+        self,
+        task_id: str,
+        seed: int,
+        session_id: Optional[str] = None,
+    ) -> Tuple[str, DealRoomObservation, DealRoomState]:
+        return self.pool.reset(task_id=task_id, seed=seed, session_id=session_id)
+
+    def step_session(
+        self,
+        session_id: str,
+        action: DealRoomAction,
+    ) -> Tuple[DealRoomObservation, float, bool, Dict[str, Any], DealRoomState]:
+        return self.pool.step(session_id, action)
+
+    def get_state_for_session(self, session_id: str) -> Dict[str, Any]:
+        return self.pool.state(session_id).model_dump()
 
     async def reset_environment(
         self, reset_kwargs: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         reset_kwargs = reset_kwargs or {}
-        obs = self.env.reset(
+        self._playground_session_id, obs, state = self.pool.reset(
             seed=reset_kwargs.get("seed"),
             task_id=reset_kwargs.get("task_id", "aligned"),
-            episode_id=reset_kwargs.get("episode_id"),
+            session_id=reset_kwargs.get("episode_id") or self._playground_session_id,
         )
+        obs.metadata["session_id"] = self._playground_session_id
         obs_dict = obs.model_dump(exclude={"reward", "metadata"})
-        return {"observation": obs_dict, "reward": obs.reward, "done": obs.done}
+        return {
+            "observation": obs_dict,
+            "reward": obs.reward,
+            "done": obs.done,
+            "session_id": self._playground_session_id,
+            "state": state.model_dump(),
+        }
 
     async def step_environment(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
+        if not self._playground_session_id:
+            raise RuntimeError("Reset the environment before stepping.")
         action = DealRoomAction.model_validate(action_data)
-        obs, reward, done, _info = self.env.step(action)
+        obs, reward, done, _info, state = self.pool.step(self._playground_session_id, action)
         obs.reward = reward
         obs.done = done
+        obs.metadata["session_id"] = self._playground_session_id
         obs_dict = obs.model_dump(exclude={"reward", "metadata"})
-        return {"observation": obs_dict, "reward": reward, "done": done}
+        return {
+            "observation": obs_dict,
+            "reward": reward,
+            "done": done,
+            "session_id": self._playground_session_id,
+            "state": state.model_dump(),
+        }
 
     def get_state(self) -> Dict[str, Any]:
-        return self.env.state.model_dump()
+        if not self._playground_session_id:
+            return DealRoomState().model_dump()
+        return self.pool.state(self._playground_session_id).model_dump()
 
 
 def load_metadata() -> EnvironmentMetadata:
@@ -278,13 +365,12 @@ def build_custom_tab(
 ) -> gr.Blocks:
     del action_fields, is_chat_env, title, quick_start_md
 
-    env = web_manager.env
-
     def default_view_state() -> Dict[str, Any]:
         return {
             "task": GUIDE_DATA["task"],
             "seed": GUIDE_DATA["seed"],
             "source": "custom",
+            "session_id": None,
             "guide_step": 0,
             "trace": [],
             "current_observation": None,
@@ -312,6 +398,8 @@ def build_custom_tab(
             merged["seed"] = base["seed"]
         if not isinstance(merged.get("source"), str):
             merged["source"] = base["source"]
+        if merged.get("session_id") is not None and not isinstance(merged.get("session_id"), str):
+            merged["session_id"] = None
         if not isinstance(merged.get("status_message"), str):
             merged["status_message"] = base["status_message"]
         if not isinstance(merged.get("guide_step"), int):
@@ -339,14 +427,18 @@ def build_custom_tab(
         source: str,
         view_state: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        obs = env.reset(seed=int(seed), task_id=task)
-        state = env.state.model_dump()
         new_state = _normalize_view_state(view_state)
+        session_id, obs, state = web_manager.reset_session(
+            task_id=task,
+            seed=int(seed),
+            session_id=new_state.get("session_id"),
+        )
         new_state.update(
             {
                 "task": task,
                 "seed": int(seed),
                 "source": source,
+                "session_id": session_id,
                 "guide_step": 0,
                 "trace": [
                     {
@@ -372,6 +464,7 @@ def build_custom_tab(
         reward: float,
         done: bool,
         info: Dict[str, Any],
+        state: Dict[str, Any],
     ) -> Dict[str, Any]:
         trace = list(_normalize_view_state(view_state).get("trace", []))
         trace.append(
@@ -393,7 +486,7 @@ def build_custom_tab(
         updated = _normalize_view_state(view_state)
         updated["trace"] = trace
         updated["current_observation"] = obs.model_dump()
-        updated["current_state"] = env.state.model_dump()
+        updated["current_state"] = state
         updated["status_message"] = (
             f"Step {trace[-1]['step']} processed. Reward {reward:.2f}. "
             f"{'Episode complete.' if done else 'Ready for the next move.'}"
@@ -535,7 +628,7 @@ def build_custom_tab(
         return "".join(cards) or "<div class='metric-card'>No constraint confidence signals yet.</div>"
 
     def _score_breakdown(state: Dict[str, Any]) -> Dict[str, float]:
-        score_state = env.state
+        score_state = DealRoomState.model_validate(state or {})
         return {
             "approval_completeness": round(
                 CCIGrader._approval_completeness(
@@ -690,25 +783,33 @@ def build_custom_tab(
         rl_html = "".join(
             f"<span class='chip chip--teal'>{_escape(item)}</span>" for item in RL_CHIPS
         )
+        learning_html = "".join(
+            "<div class='learning-step'>"
+            f"<strong>Step {number} · {_escape(label)}</strong>"
+            f"<p class='soft'>{_escape(description)}</p>"
+            "</div>"
+            for number, label, description in LEARNING_STEPS
+        )
         return (
             "<div class='classic-header'>"
-            "<h1>Classic DealRoom Control Panel</h1>"
+            "<h1>DealRoom Learning Console</h1>"
             "<p>"
-            "Use the walkthrough to understand the environment, then move into the sandbox "
-            "to test negotiation decisions against the same deterministic engine."
+            "Move from a simple seeded committee to the full enterprise negotiation lab. "
+            "Each stage reveals why more realism requires more state, more uncertainty, and more careful sequencing."
             "</p>"
             f"<div class='chip-row'>{proof_html}</div>"
             f"<div class='chip-row'>{rl_html}</div>"
+            f"<div class='learning-rail'>{learning_html}</div>"
             "</div>"
             "<div class='grid-2'>"
             "<div class='panel'>"
-            "<h3>Quick start</h3>"
+            "<h3>How to use this page</h3>"
             "<ul>"
-            "<li>Start the guided walkthrough to see a seeded conflicted episode.</li>"
-            "<li>Use the live sandbox to test manual moves or the baseline agent.</li>"
-            "<li>Finish a run to unlock the debrief and replay comparison.</li>"
+            "<li>Run the simple example first to see the minimum viable negotiation loop.</li>"
+            "<li>Walk through the medium scenario to understand hidden constraints and coalition effects.</li>"
+            "<li>Use the hard lab to test realistic moves, then inspect the judge lens and debrief.</li>"
             "</ul>"
-            "<p class='section-note'>Nothing in the stock playground changes. This custom page is the explanation and analysis layer.</p>"
+            "<p class='section-note'>Nothing in the Playground changes. This custom page is the educational layer on top of the same environment.</p>"
             "</div>"
             "<div class='panel'>"
             "<h3>Current session</h3>"
@@ -894,7 +995,7 @@ def build_custom_tab(
         observation = view_state.get("current_observation") or {}
         if not observation.get("done"):
             return saved_runs
-        score = CCIGrader.compute(env.state)
+        score = CCIGrader.compute(DealRoomState.model_validate(view_state.get("current_state") or {}))
         run = {
             "id": f"{view_state['task']}-{view_state['seed']}-{view_state['source']}-{len(saved_runs) + 1}",
             "task": view_state["task"],
@@ -1038,8 +1139,8 @@ def build_custom_tab(
         action_payload = step.get("action")
         if action_payload is not None and not view_state.get("current_observation", {}).get("done"):
             action = DealRoomAction.model_validate(action_payload)
-            obs, reward, done, info = env.step(action)
-            view_state = _record_step(view_state, action, obs, reward, done, info)
+            obs, reward, done, info, state = web_manager.step_session(view_state["session_id"], action)
+            view_state = _record_step(view_state, action, obs, reward, done, info, state.model_dump())
         view_state["guide_step"] = min(step_index + 1, len(GUIDE_DATA["steps"]) - 1)
         saved_runs = _save_run_if_complete(view_state, saved_runs)
         return (view_state, saved_runs) + _render_all(view_state, saved_runs)
@@ -1059,8 +1160,9 @@ def build_custom_tab(
     def refresh_from_env(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]):
         saved_runs = _normalize_saved_runs(saved_runs)
         updated = _normalize_view_state(view_state)
-        if env.state.episode_id:
-            updated["current_state"] = env.state.model_dump()
+        session_id = updated.get("session_id")
+        if session_id and web_manager.pool.has_session(session_id):
+            updated["current_state"] = web_manager.get_state_for_session(session_id)
             if updated.get("current_observation") is None:
                 updated["status_message"] = "Environment exists, but no custom-tab observation has been captured yet."
             else:
@@ -1078,8 +1180,8 @@ def build_custom_tab(
         if not view_state.get("current_observation"):
             view_state = _run_reset(view_state["task"], view_state["seed"], source, view_state)
         action = DealRoomAction.model_validate(payload)
-        obs, reward, done, info = env.step(action)
-        updated = _record_step(view_state, action, obs, reward, done, info)
+        obs, reward, done, info, state = web_manager.step_session(view_state["session_id"], action)
+        updated = _record_step(view_state, action, obs, reward, done, info, state.model_dump())
         updated["source"] = source
         saved_runs = _save_run_if_complete(updated, saved_runs)
         return (updated, saved_runs) + _render_all(updated, saved_runs)
@@ -1166,8 +1268,8 @@ def build_custom_tab(
         while not working_state["current_observation"]["done"] and steps < working_state["current_observation"]["max_rounds"] + 2:
             obs_model = _coerce_observation(working_state["current_observation"])
             action = _deterministic_policy_action(obs_model)
-            obs, reward, done, info = env.step(action)
-            working_state = _record_step(working_state, action, obs, reward, done, info)
+            obs, reward, done, info, state = web_manager.step_session(working_state["session_id"], action)
+            working_state = _record_step(working_state, action, obs, reward, done, info, state.model_dump())
             working_state["source"] = "baseline"
             steps += 1
             if done:
@@ -1203,24 +1305,17 @@ def build_custom_tab(
     def update_diff(saved_runs: List[Dict[str, Any]], left_id: Optional[str], right_id: Optional[str]):
         return _render_diff(_normalize_saved_runs(saved_runs), left_id, right_id)
 
+    def run_simple_example(seed: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]):
+        return run_agent_episode("aligned", int(seed), view_state, saved_runs)
+
+    def run_hard_example(seed: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]):
+        return run_agent_episode("hostile_acquisition", int(seed), view_state, saved_runs)
+
     with gr.Blocks(elem_id="dealroom-classic-root") as demo:
         gr.HTML(f"<style>{CUSTOM_CSS}</style>")
-        gr.HTML(
-            (
-                "<div class='classic-header dealroom-custom'>"
-                f"<h1>Custom Console · {html.escape(metadata.name)}</h1>"
-                "<p>Classic, judge-friendly controls for walkthroughs, sandbox testing, and post-run inspection.</p>"
-                "</div>"
-            )
-        )
 
         view_state = gr.State(default_view_state())
         saved_runs = gr.BrowserState(default_saved_runs(), storage_key="dealroom_saved_runs")
-
-        with gr.Row(elem_classes=["toolbar-row"]):
-            start_guide_btn = gr.Button("Watch Guided Walkthrough", variant="primary")
-            baseline_btn = gr.Button("Watch Baseline Agent")
-            open_sandbox_btn = gr.Button("Open Live Sandbox")
 
         status_box = gr.Markdown("Ready.", elem_classes=["dealroom-custom"])
 
@@ -1228,22 +1323,74 @@ def build_custom_tab(
             with gr.Column(scale=4):
                 overview_html = gr.HTML(elem_classes=["dealroom-custom"])
 
-                with gr.Accordion("Guided Walkthrough", open=True):
+                with gr.Accordion("Step 1 · Simple Environment", open=True):
+                    gr.Markdown(
+                        """
+### Minimal example
+
+Start with the easiest seeded committee. This shows the smallest realistic loop:
+one hidden blocker, a short approval chain, and enough signal to learn what the environment returns.
+                        """
+                    )
+                    with gr.Row():
+                        simple_seed = gr.Number(
+                            value=42,
+                            precision=0,
+                            label="Simple seed",
+                            info="Controls which aligned scenario instance is generated.",
+                        )
+                        simple_run_btn = gr.Button("Run Simple Example", variant="primary")
+                    gr.Markdown(
+                        """
+- **Input parameter:** only the seed is exposed here, so it is easy to see cause and effect.
+- **Output to watch:** stakeholder map, requested artifacts, step log, and final score.
+- **Why this parameter exists:** RL needs deterministic replay before it needs more complexity.
+                        """
+                    )
+
+                with gr.Accordion("Step 2 · Why The Simple Setup Is Limited", open=False):
+                    gr.Markdown(SIMPLE_LIMITATIONS_MD)
+
+                with gr.Accordion("Step 3 · Medium Environment", open=True):
+                    gr.Markdown(MEDIUM_EXPLANATION_MD)
+                    with gr.Row():
+                        medium_seed = gr.Number(
+                            value=GUIDE_DATA["seed"],
+                            precision=0,
+                            label="Medium walkthrough seed",
+                            info="Kept fixed so the guided explanations stay stable and comparable.",
+                            interactive=False,
+                        )
+                        guide_reset_btn = gr.Button("Run Medium Walkthrough", variant="primary")
                     guide_html = gr.HTML(elem_classes=["dealroom-custom"])
                     guide_scene_html = gr.HTML(elem_classes=["dealroom-custom"])
                     guide_action_md = gr.Markdown()
                     with gr.Row():
-                        guide_reset_btn = gr.Button("Reset Walkthrough")
-                        guide_next_btn = gr.Button("Next Step", variant="primary")
-                        guide_take_over_btn = gr.Button("Take Over")
+                        guide_next_btn = gr.Button("Next Medium Step")
+                        guide_take_over_btn = gr.Button("Take Over In Hard Lab")
 
-                with gr.Accordion("Scenario Controls", open=True):
+                with gr.Accordion("Step 4 · What Is Still Missing At Medium", open=False):
+                    gr.Markdown(MEDIUM_LIMITATIONS_MD)
+
+                with gr.Accordion("Step 5 · Hard Environment", open=True):
+                    gr.Markdown(HARD_EXPLANATION_MD)
                     with gr.Row():
-                        task_dropdown = gr.Dropdown(TASK_ORDER, value="conflicted", label="Task")
-                        seed_input = gr.Number(value=64, precision=0, label="Seed")
+                        task_dropdown = gr.Dropdown(
+                            TASK_ORDER,
+                            value="hostile_acquisition",
+                            label="Hard task",
+                            info="Choose the realistic environment variant you want to inspect or control.",
+                        )
+                        seed_input = gr.Number(
+                            value=99,
+                            precision=0,
+                            label="Hard seed",
+                            info="Use seeds to replay the same committee, constraints, and event sequence.",
+                        )
                     with gr.Row():
-                        sandbox_reset_btn = gr.Button("Reset Scenario", variant="primary")
-                        sandbox_refresh_btn = gr.Button("Refresh")
+                        hard_example_btn = gr.Button("Run Hard Example")
+                        sandbox_reset_btn = gr.Button("Open Hard Lab", variant="primary")
+                        sandbox_refresh_btn = gr.Button("Refresh Current Hard Run")
                     counterfactual_md = gr.Markdown(label="Counterfactual warnings")
                     suggestion_md = gr.Markdown(label="Suggested next action")
                     with gr.Row():
@@ -1251,71 +1398,87 @@ def build_custom_tab(
                         baseline_step_btn = gr.Button("Step Agent Once")
                         baseline_run_btn = gr.Button("Watch Baseline Agent")
 
-                with gr.Accordion("Debrief & Replay", open=False):
+                    with gr.Group():
+                        gr.Markdown("### Hard-Lab Action Composer")
+                        with gr.Row():
+                            action_type = gr.Dropdown(
+                                [
+                                    "direct_message",
+                                    "backchannel",
+                                    "send_document",
+                                    "group_proposal",
+                                    "exec_escalation",
+                                ],
+                                value="direct_message",
+                                label="Action type",
+                                info="Pick the structured negotiation move to send into the environment.",
+                            )
+                            target_dropdown = gr.Dropdown(
+                                ["all"],
+                                value="all",
+                                label="Target",
+                                info="Select which stakeholder or group receives the move.",
+                            )
+                            document_type = gr.Dropdown(
+                                [
+                                    "none",
+                                    "roi_model",
+                                    "reference_case",
+                                    "dpa",
+                                    "security_cert",
+                                    "vendor_packet",
+                                    "implementation_timeline",
+                                    "support_plan",
+                                ],
+                                value="none",
+                                label="Document",
+                                info="Attach evidence when the environment is asking for proof instead of persuasion.",
+                            )
+                        message_box = gr.Textbox(
+                            label="Message",
+                            lines=4,
+                            value="Help me understand the real approval constraint we still need to respect.",
+                            info="Natural language still matters here: tone, specificity, and credibility affect outcomes.",
+                        )
+                        with gr.Row():
+                            price_input = gr.Number(value=180000, label="Price", info="Structured commercial term.")
+                            timeline_input = gr.Number(value=14, label="Timeline weeks", info="Implementation promise under review.")
+                            support_level = gr.Textbox(value="named_support_lead", label="Support level", info="Operational support commitment.")
+                            liability_cap = gr.Textbox(value="mutual_cap", label="Liability cap", info="Risk allocation field used in hard proposals.")
+                        with gr.Row():
+                            quick_submit_btn = gr.Button("Send Action", variant="primary")
+                            bad_close_btn = gr.Button("Close Too Early")
+                            bad_ignore_legal_btn = gr.Button("Ignore Legal")
+                            bad_wrong_artifact_btn = gr.Button("Send Wrong Artifact")
+
+                    with gr.Accordion("Advanced JSON", open=False):
+                        advanced_json = gr.Code(
+                            language="json",
+                            value="{}",
+                            label="Raw action payload",
+                        )
+                        advanced_submit_btn = gr.Button("Submit JSON")
+
+                with gr.Accordion("Debrief & Replay Diff", open=False):
                     debrief_html = gr.HTML(elem_classes=["dealroom-custom"])
                     with gr.Row():
-                        diff_left = gr.Dropdown([], label="Left run")
-                        diff_right = gr.Dropdown([], label="Right run")
+                        diff_left = gr.Dropdown([], label="Left run", info="Choose the first completed run to compare.")
+                        diff_right = gr.Dropdown([], label="Right run", info="Choose the second completed run to compare.")
                     diff_refresh_btn = gr.Button("Compare Runs")
                     diff_html = gr.HTML(elem_classes=["dealroom-custom"])
 
             with gr.Column(scale=6):
+                gr.Markdown("## Results & Explanations")
                 scenario_map_html = gr.HTML(elem_classes=["dealroom-custom"])
                 with gr.Row():
                     with gr.Column(scale=5):
+                        gr.Markdown("### Interaction Log")
                         timeline_html = gr.HTML(elem_classes=["dealroom-custom"])
                     with gr.Column(scale=5):
+                        gr.Markdown("### Judge Lens")
                         judge_lens_html = gr.HTML(elem_classes=["dealroom-custom"])
+                gr.Markdown("### Signals & Missing Evidence")
                 signals_html = gr.HTML(elem_classes=["dealroom-custom"])
-
-                with gr.Group():
-                    gr.Markdown("### Quick Action")
-                    with gr.Row():
-                        action_type = gr.Dropdown(
-                            [
-                                "direct_message",
-                                "backchannel",
-                                "send_document",
-                                "group_proposal",
-                                "exec_escalation",
-                            ],
-                            value="direct_message",
-                            label="Action type",
-                        )
-                        target_dropdown = gr.Dropdown(["all"], value="all", label="Target")
-                        document_type = gr.Dropdown(
-                            [
-                                "none",
-                                "roi_model",
-                                "reference_case",
-                                "dpa",
-                                "security_cert",
-                                "vendor_packet",
-                                "implementation_timeline",
-                                "support_plan",
-                            ],
-                            value="none",
-                            label="Document",
-                        )
-                    message_box = gr.Textbox(
-                        label="Message",
-                        lines=4,
-                        value="Help me understand the real approval constraint we still need to respect.",
-                    )
-                    with gr.Row():
-                        price_input = gr.Number(value=180000, label="Price")
-                        timeline_input = gr.Number(value=14, label="Timeline weeks")
-                        support_level = gr.Textbox(value="named_support_lead", label="Support level")
-                        liability_cap = gr.Textbox(value="mutual_cap", label="Liability cap")
-                    with gr.Row():
-                        quick_submit_btn = gr.Button("Send Action", variant="primary")
-                        bad_close_btn = gr.Button("Close Too Early")
-                        bad_ignore_legal_btn = gr.Button("Ignore Legal")
-                        bad_wrong_artifact_btn = gr.Button("Send Wrong Artifact")
-
-                with gr.Accordion("Advanced JSON", open=False):
-                    advanced_json = gr.Code(language="json", value="{}", label="Raw action payload")
-                    advanced_submit_btn = gr.Button("Submit JSON")
 
         shared_outputs = [
             view_state,
@@ -1343,9 +1506,9 @@ def build_custom_tab(
             inputs=[view_state, saved_runs],
             outputs=shared_outputs,
         )
-        start_guide_btn.click(
-            fn=start_walkthrough,
-            inputs=[view_state, saved_runs],
+        simple_run_btn.click(
+            fn=run_simple_example,
+            inputs=[simple_seed, view_state, saved_runs],
             outputs=shared_outputs,
         )
         guide_reset_btn.click(
@@ -1363,9 +1526,9 @@ def build_custom_tab(
             inputs=[view_state, saved_runs],
             outputs=shared_outputs,
         )
-        open_sandbox_btn.click(
-            fn=open_sandbox,
-            inputs=[task_dropdown, seed_input, view_state, saved_runs],
+        hard_example_btn.click(
+            fn=run_hard_example,
+            inputs=[seed_input, view_state, saved_runs],
             outputs=shared_outputs,
         )
         sandbox_reset_btn.click(
@@ -1376,11 +1539,6 @@ def build_custom_tab(
         sandbox_refresh_btn.click(
             fn=refresh_from_env,
             inputs=[view_state, saved_runs],
-            outputs=shared_outputs,
-        )
-        baseline_btn.click(
-            fn=run_agent_episode,
-            inputs=[task_dropdown, seed_input, view_state, saved_runs],
             outputs=shared_outputs,
         )
         baseline_run_btn.click(

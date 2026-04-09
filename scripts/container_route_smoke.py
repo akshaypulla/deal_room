@@ -7,12 +7,15 @@ import json
 import sys
 import urllib.error
 import urllib.request
+from http.cookiejar import CookieJar
 
 
 BASE_URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:7860"
 TASKS = ("aligned", "conflicted", "hostile_acquisition")
 VALID_STAGES = {"evaluation", "negotiation", "legal_review", "final_approval", "closed"}
 VALID_MOMENTUM = {"progressing", "stalling", "critical"}
+COOKIE_JAR = CookieJar()
+OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(COOKIE_JAR))
 
 
 def request(
@@ -29,7 +32,7 @@ def request(
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(f"{BASE_URL}{path}", data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with OPENER.open(req, timeout=10) as resp:
             body = resp.read().decode("utf-8")
             status = resp.status
     except urllib.error.HTTPError as exc:
@@ -169,9 +172,8 @@ def main():
     assert metadata["version"] == "1.0.0"
     assert set(metadata["tasks"]) == set(TASKS)
 
-    initial_state = request("/state")
-    assert isinstance(initial_state["stakeholders"], dict)
-    assert initial_state["deal_stage"] in VALID_STAGES
+    initial_state = request("/state", expected=400)
+    assert "Call /reset first" in initial_state["detail"]
 
     for task_id, seed in zip(TASKS, (42, 7, 99), strict=True):
         run_task_flow(task_id, seed)

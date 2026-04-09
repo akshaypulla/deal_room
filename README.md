@@ -11,179 +11,278 @@ tags:
   - openenv
 ---
 
-# Deal Room
+# DealRoom
 
-Deal Room is an OpenEnv environment for enterprise software negotiation. The agent acts as a vendor-side negotiator trying to close a realistic B2B deal against a dynamic internal buying committee with hidden constraints, approval chains, and irreversible trust damage.
+## Environment Description & Motivation
+DealRoom is an OpenEnv-compatible reinforcement learning environment for enterprise software negotiation. The agent acts as a vendor-side negotiator working through a realistic B2B deal with a buying committee that may include finance, legal/compliance, procurement, technical leadership, operations, and executive sponsors.
 
-This V2.5 environment is built to be useful for RL and agent evaluation, not just scripted prompting. Each episode generates a seeded scenario with `2-4` stakeholders, `1-2` hidden hard constraints, up to `2` internal relationship edges, dense milestone rewards, and a deterministic terminal grader.
+This environment models a real task humans actually do:
+- discovering hidden blockers before a deal stalls,
+- sequencing conversations across multiple stakeholders,
+- sending the right evidence at the right time,
+- avoiding premature escalation,
+- and turning partial support into durable approval.
 
-The web UI at `/web` keeps the native OpenEnv `Playground` untouched and adds a second `Custom` tab for judges. That custom tab includes a guided walkthrough, live sandbox, judge lens, counterfactual warnings, mistake tracking, and replay diff views.
+Why this environment is useful:
+- enterprise negotiation is a real-world coordination problem, not a toy game,
+- the task is partially observable and long horizon,
+- language and sequencing both matter,
+- and successful behavior requires more than local pattern matching.
 
-## Why this is different
-
-- Stakeholders are dynamic, not fixed. A deal may include finance, technical, legal/compliance, procurement, operations, or an executive sponsor.
-- Constraints are partially observable. Budget, compliance, delivery, and process blockers appear through weak signals before they become fully known.
-- Language matters. The environment uses a deterministic local semantic layer to score paraphrase-sensitive request matching, contradiction, and role-aware tone.
-- Closing early is punished. Deals only close when terms are feasible and all mandatory approvers are workable.
-
-## Tasks
-
-- `aligned`: easier deal, `2-3` stakeholders, one hidden constraint, high observability.
-- `conflicted`: medium difficulty, `3-4` stakeholders, one coalition edge, medium ambiguity.
-- `hostile_acquisition`: hardest deal, `4` stakeholders, authority shift, two hidden constraints, low tolerance for inconsistency.
-
-All tasks return rewards in `[0.0, 1.0]`. Intermediate steps use bounded dense reward and successful terminal close returns the deterministic grader score.
+DealRoom is built for:
+- RL training under partial observability,
+- evaluation of long-horizon planning,
+- benchmarking negotiation and coordination policies,
+- and testing whether an agent can recover from mistakes without collapsing deal feasibility.
 
 ## Action Space
+The environment uses a typed object action represented by `DealRoomAction`.
 
-`DealRoomAction`
+Action fields:
+- `action_type` (`str`): one discrete action family
+- `target` (`str`): compatibility alias such as `all` or a stakeholder id
+- `target_ids` (`list[str]`): explicit recipient ids for the current episode roster
+- `message` (`str`): natural-language negotiation move
+- `documents` (`list[dict]`): optional supporting artifacts
+- `proposed_terms` (`dict | null`): optional structured offer terms
+- `channel` (`str`): communication metadata
+- `mode` (`str`): communication mode metadata
 
-- `action_type`: `direct_message | group_proposal | backchannel | send_document | concession | walkaway_signal | reframe_value_prop | exec_escalation`
-- `target`: compatibility alias such as `all`, `finance`, `technical`, `legal_compliance`, or legacy aliases like `CFO`
-- `target_ids`: explicit dynamic stakeholder IDs for the active episode
-- `message`: natural-language negotiation move
-- `documents`: optional artifacts such as `roi_model`, `implementation_timeline`, `security_cert`, `dpa`, `vendor_packet`, `reference_case`, `support_plan`
-- `proposed_terms`: optional structured offer with keys `price`, `timeline_weeks`, `security_commitments`, `support_level`, `liability_cap`
-- `channel`, `mode`: communication metadata
+Supported action families:
+
+| Action | Meaning |
+| --- | --- |
+| `direct_message` | Send a targeted message to a stakeholder |
+| `backchannel` | Use a quieter coordination move to gather signal or reduce escalation risk |
+| `send_document` | Share concrete evidence such as ROI, DPA, security material, or rollout plans |
+| `group_proposal` | Propose terms to multiple stakeholders or the whole committee |
+| `concession` | Offer ground on terms or process |
+| `walkaway_signal` | Signal risk of disengagement |
+| `reframe_value_prop` | Reposition the value proposition for a role or coalition |
+| `exec_escalation` | Push toward executive attention or formal approval pressure |
+
+Common document types:
+- `roi_model`
+- `reference_case`
+- `dpa`
+- `security_cert`
+- `vendor_packet`
+- `implementation_timeline`
+- `support_plan`
+
+Common structured term fields:
+- `price`
+- `timeline_weeks`
+- `security_commitments`
+- `support_level`
+- `liability_cap`
+
+Action space type:
+- discrete action family with structured typed parameters
 
 ## Observation Space
+The observation space is a typed object represented by `DealRoomObservation`.
 
-`DealRoomObservation`
+The agent sees:
 
-- `stakeholders`: active roster with display name, role, authority, and mandatory status
-- `stakeholder_messages`: current visible stakeholder replies
-- `engagement_level`: noisy proxy for approval
-- `weak_signals`: ambiguous hints about internal blockers
-- `known_constraints`: constraints that have been fully uncovered
-- `requested_artifacts`: still-missing artifacts by stakeholder
-- `approval_path_progress`: approval band and authority for each stakeholder
-- `deal_stage`: `evaluation -> negotiation -> legal_review -> final_approval -> closed`
-- `active_blockers`, `veto_precursors`, `scenario_hint`, `competitor_events`, `days_to_deadline`
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `round_number` | `int` | Current round |
+| `max_rounds` | `int` | Episode budget |
+| `stakeholders` | `dict[str, dict]` | Active roster with role and authority summary |
+| `stakeholder_messages` | `dict[str, str]` | Visible stakeholder replies |
+| `engagement_level` | `dict[str, float]` | Noisy public proxy for movement and support |
+| `weak_signals` | `dict[str, list[str]]` | Indirect hints about hidden blockers |
+| `known_constraints` | `list[dict]` | Constraints sufficiently revealed to act on |
+| `requested_artifacts` | `dict[str, list[str]]` | Evidence still being requested |
+| `approval_path_progress` | `dict[str, dict]` | Public approval band and authority info |
+| `deal_momentum` | `str` | `progressing`, `stalling`, or `critical` |
+| `deal_stage` | `str` | Stage in the approval pipeline |
+| `competitor_events` | `list[str]` | External pressure events |
+| `veto_precursors` | `dict[str, str]` | Early warning signs before a silent veto |
+| `active_blockers` | `list[str]` | Stakeholders currently blocking movement |
+| `days_to_deadline` | `int` | Remaining time pressure |
+| `done` | `bool` | Whether the episode has ended |
+| `info` | `dict` | Auxiliary signals for analysis/debugging |
 
-## Reward Model
+Stakeholder-level visible attributes:
+- `display_name`
+- `role`
+- `mandatory`
+- `authority`
 
-- Dense milestone reward per step, capped at `0.15`
-- Milestones include discovering hidden constraints, satisfying requested artifacts, moving mandatory approvers up a band, removing blockers, and legitimate stage advances
-- Bad actions do not create large negative reward, but they apply permanent marks and feasibility damage that reduce future returns and the final score
-- Terminal score uses approval completeness, constraint satisfaction, term feasibility, relationship durability, and efficiency
+What is intentionally hidden:
+- true utility weights,
+- hidden feasibility constraints until inferred,
+- private resistance beyond what weak signals imply,
+- and internal relationship effects until they become externally visible.
 
-## Local Setup
+Observation space type:
+- structured object with dynamic roster and partial observability
 
+## Task Description
+The agent must close a feasible, durable enterprise deal before timeout.
+
+Success criteria:
+- the deal closes,
+- all mandatory approvers are workable or supportive,
+- no hard constraints remain unresolved,
+- the final terms are feasible,
+- and veto-level resistance is avoided.
+
+Failure modes:
+- timeout,
+- silent veto,
+- infeasible terms,
+- unresolved hidden constraints,
+- and cumulative trust damage that caps recovery.
+
+## Difficulty Levels
+DealRoom includes three benchmark levels that map naturally to a learning progression.
+
+### Simple
+Task id: `aligned`
+
+What it models:
+- a lower-friction buying committee,
+- fewer active stakeholders,
+- one main hidden blocker,
+- and higher observability.
+
+Why it is easiest:
+- shorter approval path,
+- fewer conflicting incentives,
+- and easier diagnosis of which evidence matters.
+
+### Medium
+Task id: `conflicted`
+
+What it adds:
+- more stakeholders,
+- conflicting incentives,
+- approval drag,
+- and relationship-sensitive sequencing.
+
+Why it is harder than simple:
+- the agent must manage stakeholder tension instead of a mostly aligned committee,
+- new evidence requests matter more,
+- and one action can help one role while slowing another.
+
+### Hard
+Task id: `hostile_acquisition`
+
+What it models:
+- post-acquisition pressure,
+- authority shift events,
+- multiple hidden constraints,
+- and lower tolerance for inconsistency or premature pressure.
+
+Why it is harder than medium:
+- time pressure is tighter,
+- recovery from mistakes is harder,
+- feasibility can shift mid-episode,
+- and multi-party coordination is less forgiving.
+
+## Setup Instructions
+### 1. Clone the repository
+```bash
+git clone <your-repo-url>
+cd deal_room
+```
+
+### 2. Install dependencies
 ```bash
 pip install -r requirements.txt
+```
+
+### 3. Run local validation
+```bash
 pytest -q
 openenv validate
+```
+
+### 4. Start the server
+```bash
 uvicorn server.app:app --reload --port 7860
 ```
 
-## Docker
-
+### 5. Optional Docker setup
 ```bash
 docker build -t deal-room-env:latest -f Dockerfile .
 docker run --rm -p 7860:7860 deal-room-env:latest
 ```
 
-The Docker image is optimized for reliable startup on limited hardware. The semantic analyzer will use the lightweight embedding path when the dependency is available, and otherwise falls back to deterministic lexical similarity so the server still starts cleanly and reproducibly.
-
-## Hugging Face Spaces
-
-### Prerequisites
-
-1. **Hugging Face Account**: Create an account at [huggingface.co](https://huggingface.co)
-2. **Get an HF Token**: Generate a token at [hf.co/settings/tokens](https://hf.co/settings/tokens) with "write" permissions
-3. **Set the token**:
-
+## Usage Instructions
+### Start the environment locally
 ```bash
-export HF_TOKEN="your_huggingface_token_here"
+uvicorn server.app:app --reload --port 7860
 ```
 
-Or use the `huggingface_hub` CLI:
-```bash
-huggingface-cli login
+Primary endpoints:
+- `GET /health`
+- `GET /metadata`
+- `POST /reset`
+- `POST /step`
+- `GET /state`
+- `GET /web`
+
+### Open the web UI
+```text
+http://127.0.0.1:7860/web
 ```
 
-### Deploy to Hugging Face Spaces
+The UI behavior:
+- `Playground` stays as the direct interaction tab
+- `Custom` is the teaching and explanation tab
 
-```bash
-# Option 1: Using openenv CLI (recommended)
-openenv push
-
-# Option 2: With custom repository ID
-openenv push -r <your_username>/deal-room
-
-# Option 3: Using the deploy script
-./deploy.sh <your_username>/deal-room
-```
-
-### Expected Space
-
-After deployment, your space will be available at:
-```
-https://huggingface.co/spaces/<your_username>/deal-room
-```
-
-### Space Features
-
-- **Web UI**: Interactive Gradio interface at `/web`
-- **Playground Tab**: Native OpenEnv playground for testing
-- **Custom Tab**: Judge tools including walkthrough, sandbox, and diff views
-- **API Endpoints**:
-  - `/health` - Health check
-  - `/metadata` - Environment metadata
-  - `/reset` - Reset environment
-  - `/step` - Execute action
-  - `/state` - Get current state
-
-Expected endpoints:
-
-- `/health`
-- `/metadata`
-- `/reset`
-- `/step`
-- `/state`
-
-## Baseline
-
-`inference.py` runs a seeded protocol baseline across all three tasks and prints the required structured logs:
-
+### Run the baseline
 ```bash
 python inference.py
 ```
 
-Credential resolution behavior:
+Hackathon credential behavior:
+- during evaluation, `inference.py` prefers `API_KEY` + `API_BASE_URL`,
+- for local development, it can fall back to `OPENAI_API_KEY` or `HF_TOKEN`,
+- and it uses the OpenAI client when the LiteLLM proxy is injected.
 
-- During hackathon evaluation, `inference.py` prefers the injected `API_BASE_URL` + `API_KEY` pair and will use the OpenAI client against that LiteLLM proxy by default.
-- For local development, it can fall back to `OPENAI_API_KEY` or `HF_TOKEN` if `API_KEY` is not present.
-- Set `DEALROOM_ENABLE_LLM_MESSAGES=0` only if you intentionally want fully local fallback behavior without proxy calls.
-
-Current local heuristic smoke run with `seed=42`:
-
-- `aligned`: `0.85`
-- `conflicted`: `0.83`
-- `hostile_acquisition`: `0.79`
-
-Recent 4-seed stress snapshot:
-
-- `aligned` mean: `0.8761`
-- `conflicted` mean: `0.8118`
-- `hostile_acquisition` mean: `0.5905`
-
-The task ladder is deterministic and currently satisfies the expected ordering `aligned > conflicted > hostile_acquisition`.
-
-## Pre-Submission Validation
-
-Run the local validator before pushing:
-
+### Run the submission validator
 ```bash
 bash scripts/validate-submission.sh
 ```
 
-## Project Layout
+### Run the route smoke test
+```bash
+python scripts/container_route_smoke.py http://127.0.0.1:7860
+```
 
+## Baseline Scores
+Current local benchmark with `seed=42`:
+
+| Level | Task | Baseline score |
+| --- | --- | --- |
+| Simple | `aligned` | `0.86` |
+| Medium | `conflicted` | `0.83` |
+| Hard | `hostile_acquisition` | `0.80` |
+
+Recent stress snapshot:
+
+| Task | Mean score |
+| --- | --- |
+| `aligned` | `0.8761` |
+| `conflicted` | `0.8118` |
+| `hostile_acquisition` | `0.5905` |
+
+Expected interpretation:
+- `aligned` should be consistently solvable by the baseline,
+- `conflicted` should remain strong but require more sequencing discipline,
+- `hostile_acquisition` should be the least stable and closest to real-world pressure.
+
+## Project Layout
 - [models.py](/Users/akshaypulla/Documents/deal_room/models.py)
+- [server/app.py](/Users/akshaypulla/Documents/deal_room/server/app.py)
 - [server/deal_room_environment.py](/Users/akshaypulla/Documents/deal_room/server/deal_room_environment.py)
-- [server/scenarios.py](/Users/akshaypulla/Documents/deal_room/server/scenarios.py)
-- [server/stakeholders.py](/Users/akshaypulla/Documents/deal_room/server/stakeholders.py)
-- [server/semantics.py](/Users/akshaypulla/Documents/deal_room/server/semantics.py)
 - [server/grader.py](/Users/akshaypulla/Documents/deal_room/server/grader.py)
+- [server/gradio_custom.py](/Users/akshaypulla/Documents/deal_room/server/gradio_custom.py)
+- [server/scenarios.py](/Users/akshaypulla/Documents/deal_room/server/scenarios.py)
+- [server/semantics.py](/Users/akshaypulla/Documents/deal_room/server/semantics.py)
 - [inference.py](/Users/akshaypulla/Documents/deal_room/inference.py)

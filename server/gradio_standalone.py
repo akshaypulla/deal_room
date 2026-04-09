@@ -2,50 +2,47 @@
 Standalone Gradio UI for DealRoom - Pure Python, no external openenv dependencies.
 """
 
+from __future__ import annotations
+
 import gradio as gr
+
 from models import DealRoomAction
-from server.deal_room_environment import DealRoomEnvironment
 from server.gradio_custom import DealRoomWebManager, build_custom_tab, load_metadata
+from server.session_pool import DealRoomSessionPool
 
 
 class DealRoomGradioUI:
     """Gradio UI manager for DealRoom environment."""
 
-    def __init__(self, env: DealRoomEnvironment | None = None):
-        self.env = env or DealRoomEnvironment()
-        self.current_task_id = "aligned"
-        self.current_seed = 42
-        self.last_observation = None
+    def __init__(self, pool: DealRoomSessionPool):
+        self.pool = pool
 
-    def reset(self, task_id: str, seed: int):
+    def reset(self, task_id: str, seed: int, session_id: str | None):
         """Reset the environment."""
-        self.current_task_id = task_id
-        self.current_seed = seed
-        self.last_observation = self.env.reset(seed=seed, task_id=task_id)
-        return self._format_observation(self.last_observation)
+        session_id, obs, _state = self.pool.reset(task_id=task_id, seed=int(seed), session_id=session_id)
+        return self._format_observation(obs), self._get_state_info(session_id), session_id
 
-    def step(self, action_type: str, target: str, message: str):
+    def step(self, action_type: str, target: str, message: str, session_id: str | None):
         """Take a step in the environment."""
-        if self.last_observation is None or self.last_observation.done:
-            return "Please reset the environment first.", "", self._get_state_info()
+        if not session_id or not self.pool.has_session(session_id):
+            return "Please reset the environment first.", "", "Not initialized", session_id
 
         action = DealRoomAction(
             action_type=action_type,
             target=target,
             message=message,
         )
-        obs, reward, done, info = self.env.step(action)
-        self.last_observation = obs
+        obs, reward, done, info, state = self.pool.step(session_id, action)
 
-        response = self._format_response(obs, reward, done, info)
-        state_info = self._get_state_info()
-        return response, "", state_info
+        response = self._format_response(obs, reward, done, info, state.failure_reason or "Timeout")
+        state_info = self._get_state_info(session_id)
+        return response, "", state_info, session_id
 
-    def get_current_state(self):
+    def get_current_state(self, session_id: str | None):
         """Get current state."""
-        if self.last_observation is None:
+        if not session_id or not self.pool.has_session(session_id):
             return "Environment not initialized. Please reset."
-        return self._get_state_info()
+        return self._get_state_info(session_id)
 
     def _format_observation(self, obs):
         """Format observation for display."""
@@ -77,7 +74,7 @@ class DealRoomGradioUI:
 
         return "\n".join(lines)
 
-    def _format_response(self, obs, reward, done, info):
+    def _format_response(self, obs, reward, done, info, failure_reason: str):
         """Format step response."""
         lines = [self._format_observation(obs)]
 
@@ -87,21 +84,16 @@ class DealRoomGradioUI:
                 lines.append(f"## ✅ Episode Complete! Score: {reward:.4f}")
             else:
                 lines.append("")
-                lines.append(
-                    f"## ❌ Episode Failed: {self.env.state.failure_reason or 'Timeout'}"
-                )
+                lines.append(f"## ❌ Episode Failed: {failure_reason}")
         else:
             lines.append("")
             lines.append(f"**Reward:** {reward:.4f}")
 
         return "\n".join(lines)
 
-    def _get_state_info(self):
+    def _get_state_info(self, session_id: str):
         """Get current state info."""
-        if self.last_observation is None:
-            return "Not initialized"
-
-        state = self.env.state
+        state = self.pool.state(session_id)
         return f"""**State:**
 - Round: {state.round_number}/{state.max_rounds}
 - Stage: {state.deal_stage}
@@ -111,15 +103,16 @@ class DealRoomGradioUI:
 """
 
 
-def create_dealroom_gradio_app():
+def create_dealroom_gradio_app(pool: DealRoomSessionPool | None = None):
     """Create the Gradio app with Playground and Custom tabs."""
-    shared_env = DealRoomEnvironment()
-    ui = DealRoomGradioUI(env=shared_env)
+    pool = pool or DealRoomSessionPool()
+    ui = DealRoomGradioUI(pool=pool)
     metadata = load_metadata()
-    custom_manager = DealRoomWebManager(shared_env, metadata)
+    custom_manager = DealRoomWebManager(pool, metadata)
 
     playground_tab = gr.Blocks(title="DealRoom Playground")
     with playground_tab:
+        session_state = gr.State(None)
         gr.Markdown("# DealRoom Negotiation Environment")
         gr.Markdown(
             "### OpenEnv-compatible multi-stakeholder enterprise negotiation simulator"
@@ -173,18 +166,26 @@ def create_dealroom_gradio_app():
                 state_info = gr.Textbox(label="State Info", lines=8, interactive=False)
 
         # Event handlers
-        reset_btn.click(fn=ui.reset, inputs=[task_id, seed], outputs=output)
+        reset_btn.click(
+            fn=ui.reset,
+            inputs=[task_id, seed, session_state],
+            outputs=[output, state_info, session_state],
+        )
 
         submit_btn.click(
             fn=ui.step,
-            inputs=[action_type, target, message],
-            outputs=[output, message, state_info],
+            inputs=[action_type, target, message, session_state],
+            outputs=[output, message, state_info, session_state],
         )
 
         clear_btn.click(fn=lambda: "", outputs=message)
 
         # Auto-reset when task changes
-        task_id.change(fn=ui.reset, inputs=[task_id, seed], outputs=output)
+        task_id.change(
+            fn=ui.reset,
+            inputs=[task_id, seed, session_state],
+            outputs=[output, state_info, session_state],
+        )
 
         gr.Markdown("""
         ---
