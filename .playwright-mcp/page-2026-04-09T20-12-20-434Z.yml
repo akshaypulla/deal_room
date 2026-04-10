@@ -1,0 +1,139 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f4e21]:
+    - main [ref=f4e22]:
+      - generic [ref=f4e32]:
+        - generic [ref=f4e39]:
+          - 'heading "OpenEnv Agentic Environment: DealRoom" [level=1] [ref=f4e40]'
+          - generic [ref=f4e41]: Classic Playground for the multi-stakeholder enterprise negotiation simulator.
+        - generic [ref=f4e42]:
+          - generic [ref=f4e43]:
+            - generic [ref=f4e44]:
+              - button [ref=f4e45] [cursor=pointer]: Playground
+              - button [ref=f4e46] [cursor=pointer]: Custom
+            - tablist [ref=f4e47]:
+              - tab "Playground" [active] [selected] [ref=f4e48] [cursor=pointer]
+              - tab "Custom" [ref=f4e49] [cursor=pointer]
+          - tabpanel [ref=f4e50]:
+            - generic [ref=f4e54]:
+              - generic [ref=f4e55]:
+                - generic [ref=f4e56]:
+                  - button "Quick Start ▼" [ref=f4e57] [cursor=pointer]:
+                    - generic [ref=f4e58]: Quick Start
+                    - generic [ref=f4e59]: ▼
+                  - generic [ref=f4e61]:
+                    - heading "Connect to this environment" [level=3] [ref=f4e67]
+                    - paragraph [ref=f4e72]:
+                      - text: Connect from Python using
+                      - code [ref=f4e73]: DealRoomEnvironment
+                      - text: ":"
+                    - generic [ref=f4e78]: Python
+                    - generic [ref=f4e79]:
+                      - button [ref=f4e81] [cursor=pointer]:
+                        - img [ref=f4e83]
+                      - generic [ref=f4e89]:
+                        - generic [ref=f4e92]: ⌄
+                        - textbox "Code input container" [ref=f4e93]:
+                          - generic [ref=f4e94]: from deal_room import DealRoomAction, DealRoomEnvironment
+                          - generic [ref=f4e96]: "with DealRoomEnvironment() as env:"
+                          - generic [ref=f4e97]: obs = env.reset(task_id="aligned", seed=42)
+                          - generic [ref=f4e98]: result = env.step(
+                          - generic [ref=f4e99]: DealRoomAction(message="Help me understand the real blocker.")
+                          - generic [ref=f4e100]: )
+                    - paragraph [ref=f4e106]: "Or connect directly to a running server:"
+                    - generic [ref=f4e111]: Direct server mode
+                    - generic [ref=f4e112]:
+                      - button [ref=f4e114] [cursor=pointer]:
+                        - img [ref=f4e116]
+                      - textbox "Code input container" [ref=f4e125]:
+                        - generic [ref=f4e126]: env = DealRoomEnvironment(base_url="http://localhost:7860")
+                    - generic [ref=f4e131]:
+                      - heading "Contribute to this environment" [level=3] [ref=f4e132]
+                      - paragraph [ref=f4e133]: Submit improvements via pull request on the Hugging Face Hub.
+                    - generic [ref=f4e138]: Fork this environment
+                    - generic [ref=f4e139]:
+                      - button [ref=f4e141] [cursor=pointer]:
+                        - img [ref=f4e143]
+                      - textbox "Code input container" [ref=f4e152]:
+                        - generic [ref=f4e153]: openenv fork akshaypulla/deal-room --repo-id <your-username>/deal-room
+                    - paragraph [ref=f4e158]: "Then make your changes and submit a pull request:"
+                    - generic [ref=f4e163]: Submit your PR
+                    - generic [ref=f4e164]:
+                      - button [ref=f4e166] [cursor=pointer]:
+                        - img [ref=f4e168]
+                      - textbox "Code input container" [ref=f4e177]:
+                        - generic [ref=f4e178]: cd <forked-repo>
+                        - generic [ref=f4e179]: openenv push akshaypulla/deal-room --create-pr
+                    - paragraph [ref=f4e184]:
+                      - text: For more information, see the
+                      - link "OpenEnv documentation" [ref=f4e185] [cursor=pointer]:
+                        - /url: https://github.com/huggingface/openenv
+                      - text: .
+                - button "README ▼" [ref=f4e187] [cursor=pointer]:
+                  - generic [ref=f4e188]: README
+                  - generic [ref=f4e189]: ▼
+              - generic [ref=f4e193]:
+                - generic [ref=f4e197]:
+                  - heading "Playground" [level=2] [ref=f4e198]
+                  - paragraph [ref=f4e199]: Click Reset to start a new episode.
+                - generic [ref=f4e200]:
+                  - generic [ref=f4e202]:
+                    - generic [ref=f4e204]:
+                      - generic [ref=f4e205]: Scenario
+                      - generic [ref=f4e206]: Choose the negotiation scenario
+                      - generic [ref=f4e209]:
+                        - listbox "Scenario" [ref=f4e210]: aligned
+                        - generic:
+                          - img
+                    - generic [ref=f4e212]:
+                      - generic [ref=f4e213]: Seed
+                      - spinbutton "Seed" [ref=f4e214]: "42"
+                  - generic [ref=f4e215]:
+                    - generic [ref=f4e217]:
+                      - generic [ref=f4e218]: Move Type
+                      - generic [ref=f4e221]:
+                        - listbox "Move Type" [ref=f4e222]: direct_message
+                        - generic:
+                          - img
+                    - generic [ref=f4e224]:
+                      - generic [ref=f4e225]: Target
+                      - textbox "Target" [ref=f4e227]:
+                        - /placeholder: all
+                        - text: all
+                    - generic [ref=f4e229]:
+                      - generic [ref=f4e230]: Terms
+                      - textbox "Terms" [ref=f4e232]:
+                        - /placeholder: "{\"price\": 180000, \"timeline_weeks\": 14, \"support_level\": \"named_support_lead\"}"
+                    - generic [ref=f4e234]:
+                      - generic [ref=f4e235]: Message
+                      - textbox "Message" [ref=f4e237]:
+                        - /placeholder: Enter message...
+                        - text: Help me understand the real approval concern we still need to address.
+                  - generic [ref=f4e238]:
+                    - button "Step" [ref=f4e239] [cursor=pointer]
+                    - button "Reset" [ref=f4e240] [cursor=pointer]
+                    - button "Get state" [ref=f4e241] [cursor=pointer]
+                  - generic [ref=f4e245]:
+                    - heading "Status" [level=3] [ref=f4e246]
+                    - paragraph [ref=f4e247]: Reset the environment to begin
+                  - generic [ref=f4e248]:
+                    - generic [ref=f4e250]:
+                      - generic [ref=f4e251]: Raw JSON response
+                      - textbox "Raw JSON response" [disabled] [ref=f4e253]:
+                        - /placeholder: "{}"
+                    - generic [ref=f4e255]:
+                      - generic [ref=f4e256]: State Info
+                      - textbox "State Info" [disabled] [ref=f4e258]:
+                        - /placeholder: ""
+    - contentinfo "Gradio footer navigation" [ref=f4e23]:
+      - button "Use via API logo" [ref=f4e24] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f4e25]
+      - generic [ref=f4e26]: ·
+      - link "Built with Gradio logo" [ref=f4e27] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f4e28]
+      - generic [ref=f4e29]: ·
+      - button "Settings Settings" [ref=f4e30] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f4e31]

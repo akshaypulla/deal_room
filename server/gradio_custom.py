@@ -1,4 +1,4 @@
-"""DealRoom custom Gradio tab with a progressive round-table learning flow."""
+"""DealRoom custom Gradio tab - visual round-table conference interface."""
 
 from __future__ import annotations
 
@@ -40,318 +40,469 @@ ROLE_ICONS = {
     "executive_sponsor": "🎯",
 }
 STAGE_ORDER = ["evaluation", "negotiation", "legal_review", "final_approval", "closed"]
-SEAT_POSITIONS = [
-    "top: 7%; left: 50%; transform: translateX(-50%);",
-    "top: 36%; left: 8%;",
-    "top: 36%; right: 8%;",
-    "bottom: 7%; left: 50%; transform: translateX(-50%);",
-]
-LEVEL_EXPLANATIONS = {
-    "simple": {
-        "title": "Simple round-table discussion",
-        "body": (
-            "This round keeps the committee small and the hidden structure light. "
-            "You can see the basic negotiation loop: hear concerns, share one relevant artifact, "
-            "and watch approval move."
-        ),
-        "limits": (
-            "This is still too easy for a realistic enterprise deal. There are fewer stakeholders, "
-            "less internal politics, and only one hidden feasibility issue."
-        ),
-    },
-    "medium": {
-        "title": "Medium round-table with hidden friction",
-        "body": (
-            "Now the committee has competing incentives. New artifacts matter, blockers can persist "
-            "across rounds, and the right move is often to clarify before proposing."
-        ),
-        "limits": (
-            "This still abstracts the full enterprise mess. Relationship propagation is bounded and "
-            "stakeholders remain deterministic rather than fully strategic planners."
-        ),
-    },
-    "hard": {
-        "title": "Hard round-table close to the real workflow",
-        "body": (
-            "This is the full lab. Multiple hard constraints, authority shifts, lower tolerance for bad sequencing, "
-            "and a terminal grader that only rewards feasible closure."
-        ),
-        "limits": (
-            "This is the realistic end of the environment we ship today. It is still a deterministic hybrid simulator, "
-            "not a free-running multi-LLM society."
-        ),
-    },
-}
 
 CUSTOM_CSS = """
-#dealroom-custom-root {
-  background: #0d1117;
-  border: 1px solid #243041;
-  border-radius: 14px;
-  padding: 18px;
+.dealroom-custom {
+    background: #0d1117;
+    border-radius: 16px;
+    padding: 20px;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    min-height: 700px;
 }
-#dealroom-custom-root .dealroom-shell,
-#dealroom-custom-root .dealroom-shell * {
-  font-family: "IBM Plex Sans", "Inter", system-ui, sans-serif;
+.dealroom-custom * {
+    color: #e5e7eb;
 }
-#dealroom-custom-root .hero {
-  background: linear-gradient(135deg, #0f141b 0%, #141b24 100%);
-  border: 1px solid #243041;
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 16px;
+.dealroom-custom h1, .dealroom-custom h2, .dealroom-custom h3 {
+    color: #f3f4f6;
 }
-#dealroom-custom-root .hero h1 {
-  margin: 0 0 8px;
-  color: #f3f4f6;
-  font-size: 1.4rem;
+.split-container {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+    min-height: 550px;
 }
-#dealroom-custom-root .hero p {
-  margin: 0;
-  color: #9ba7b6;
-  line-height: 1.45;
+.left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
-#dealroom-custom-root .proof-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+.right-panel {
+    background: #10161d;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 16px;
+    height: fit-content;
 }
-#dealroom-custom-root .chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid #304154;
-  background: #111822;
-  color: #d8e1ea;
-  font-size: 0.8rem;
+.progress-strip {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #10161d;
+    border-radius: 10px;
+    margin-bottom: 8px;
 }
-#dealroom-custom-root .chip--green {
-  background: rgba(22, 163, 74, 0.12);
-  border-color: rgba(34, 197, 94, 0.35);
-  color: #86efac;
+.progress-step {
+    flex: 1;
+    text-align: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    background: #1f2937;
+    color: #9ca3af;
+    border: 1px solid #374151;
 }
-#dealroom-custom-root .chip--amber {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.35);
-  color: #fcd34d;
+.progress-step.active {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: #22c55e;
+    color: #22c55e;
 }
-#dealroom-custom-root .chip--red {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #fca5a5;
+.progress-step.locked {
+    opacity: 0.5;
 }
-#dealroom-custom-root .step-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+.progress-step .unlock-hint {
+    display: block;
+    font-size: 0.7rem;
+    margin-top: 4px;
+    opacity: 0.7;
 }
-#dealroom-custom-root .step-card {
-  background: #10161d;
-  border: 1px solid #283240;
-  border-radius: 10px;
-  padding: 12px;
+.round-area {
+    background: radial-gradient(ellipse at center, #1a1f2e 0%, #0d1117 70%);
+    border-radius: 50%;
+    width: 100%;
+    max-width: 420px;
+    height: 340px;
+    margin: 0 auto;
+    border: 2px solid #2a3142;
+    box-shadow: 0 0 60px rgba(34, 197, 94, 0.08), inset 0 0 60px rgba(0,0,0,0.5);
+    position: relative;
 }
-#dealroom-custom-root .step-card strong {
-  display: block;
-  color: #f3f4f6;
-  margin-bottom: 4px;
+.round-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    background: rgba(13, 17, 23, 0.9);
+    border: 2px solid #304154;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
 }
-#dealroom-custom-root .step-card p {
-  margin: 0;
-  color: #9ba7b6;
-  font-size: 0.85rem;
+.round-center strong {
+    font-size: 0.85rem;
+    color: #22c55e;
 }
-#dealroom-custom-root .status-panel,
-#dealroom-custom-root .panel {
-  background: #10161d;
-  border: 1px solid #283240;
-  border-radius: 10px;
-  padding: 14px;
+.round-center span {
+    font-size: 0.7rem;
+    color: #9ca3af;
 }
-#dealroom-custom-root .status-panel h3,
-#dealroom-custom-root .panel h3,
-#dealroom-custom-root .panel h4 {
-  margin-top: 0;
-  color: #f3f4f6;
+.seat {
+    position: absolute;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    cursor: pointer;
+    border: 3px solid transparent;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
 }
-#dealroom-custom-root .panel + .panel {
-  margin-top: 12px;
+.seat:hover {
+    transform: scale(1.1);
+    z-index: 10;
 }
-#dealroom-custom-root .soft {
-  color: #9ba7b6;
+.seat.selected {
+    border-color: #60a5fa;
+    box-shadow: 0 0 20px rgba(96, 165, 250, 0.4);
 }
-#dealroom-custom-root .round-area {
-  background: radial-gradient(circle at center, #192233 0%, #0d1117 68%);
-  border: 1px solid #243041;
-  border-radius: 14px;
-  padding: 20px;
-  min-height: 420px;
+.seat.supporter {
+    background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+    border-color: #22c55e;
 }
-#dealroom-custom-root .round-table {
-  position: relative;
-  width: min(100%, 420px);
-  height: 320px;
-  margin: 0 auto 14px;
-  border-radius: 50%;
-  background: radial-gradient(circle at center, #111827 0%, #0b1118 70%);
-  border: 2px solid #273244;
-  box-shadow: inset 0 0 50px rgba(0,0,0,0.45);
+.seat.blocker {
+    background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%);
+    border-color: #ef4444;
+    animation: pulse-blocker 2s ease-in-out infinite;
 }
-#dealroom-custom-root .round-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  width: 180px;
-  padding: 14px;
-  border-radius: 12px;
-  background: rgba(13, 17, 23, 0.86);
-  border: 1px solid #304154;
+.seat.uncertain {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-color: #f59e0b;
 }
-#dealroom-custom-root .round-center strong {
-  display: block;
-  color: #f3f4f6;
+.seat.dimmed {
+    opacity: 0.4;
 }
-#dealroom-custom-root .round-center span {
-  color: #9ba7b6;
-  font-size: 0.86rem;
+.seat-icon {
+    font-size: 1.3rem;
+    margin-bottom: 2px;
 }
-#dealroom-custom-root .seat {
-  position: absolute;
-  width: 86px;
-  min-height: 82px;
-  border-radius: 16px;
-  padding: 10px 8px;
-  text-align: center;
-  background: #121a25;
-  border: 1px solid #324254;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+.seat-name {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
 }
-#dealroom-custom-root .seat.selected {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+.seat-role {
+    font-size: 0.6rem;
+    color: #9ca3af;
 }
-#dealroom-custom-root .seat.supporter {
-  border-color: rgba(34, 197, 94, 0.5);
+@keyframes pulse-blocker {
+    0%, 100% { box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3); }
+    50% { box-shadow: 0 4px 30px rgba(239, 68, 68, 0.6); }
 }
-#dealroom-custom-root .seat.blocker {
-  border-color: rgba(239, 68, 68, 0.55);
+.anchored-popup {
+    position: absolute;
+    width: 260px;
+    background: #0f141b;
+    border: 1px solid #304154;
+    border-radius: 12px;
+    padding: 14px;
+    z-index: 20;
+    animation: popup-appear 0.3s ease-out;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
-#dealroom-custom-root .seat-icon {
-  font-size: 1.35rem;
-  line-height: 1;
+@keyframes popup-appear {
+    from { opacity: 0; transform: translate(-50%, -40%); }
+    to { opacity: 1; transform: translate(-50%, -50%); }
 }
-#dealroom-custom-root .seat-name {
-  color: #f3f4f6;
-  font-size: 0.76rem;
-  font-weight: 600;
-  margin-top: 6px;
+.popup-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #1f2937;
 }
-#dealroom-custom-root .seat-band {
-  color: #9ba7b6;
-  font-size: 0.72rem;
-  margin-top: 3px;
+.popup-icon {
+    font-size: 1.3rem;
 }
-#dealroom-custom-root .speaker-popup {
-  background: #0f141b;
-  border: 1px solid #304154;
-  border-radius: 12px;
-  padding: 16px;
+.popup-name {
+    font-weight: 700;
+    color: #f3f4f6;
+    font-size: 0.9rem;
 }
-#dealroom-custom-root .speaker-popup h3 {
-  margin: 0 0 8px;
-  color: #f3f4f6;
+.popup-role {
+    font-size: 0.7rem;
+    color: #9ca3af;
 }
-#dealroom-custom-root .quote {
-  background: #0a1016;
-  border-left: 3px solid #3b82f6;
-  padding: 12px 14px;
-  border-radius: 8px;
-  color: #e5e7eb;
-  margin: 10px 0 12px;
+.popup-quote {
+    background: #0a1016;
+    border-left: 3px solid #3b82f6;
+    padding: 10px 12px;
+    border-radius: 0 6px 6px 0;
+    margin: 8px 0;
+    color: #e5e7eb;
+    font-style: italic;
+    font-size: 0.85rem;
 }
-#dealroom-custom-root .speaker-grid,
-#dealroom-custom-root .metrics-grid,
-#dealroom-custom-root .timeline-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 10px;
+.popup-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
 }
-#dealroom-custom-root .metric,
-#dealroom-custom-root .timeline-item {
-  background: #0b1118;
-  border: 1px solid #2b3746;
-  border-radius: 8px;
-  padding: 10px 12px;
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
 }
-#dealroom-custom-root .metric strong,
-#dealroom-custom-root .timeline-item strong {
-  display: block;
-  color: #f3f4f6;
-  margin-bottom: 4px;
-  font-size: 0.9rem;
+.status-dot.green { background: #22c55e; }
+.status-dot.amber { background: #f59e0b; }
+.status-dot.red { background: #ef4444; }
+.popup-request {
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 8px;
 }
-#dealroom-custom-root .metric p,
-#dealroom-custom-root .timeline-item p {
-  margin: 0;
-  color: #9ba7b6;
-  font-size: 0.84rem;
+.popup-request strong {
+    color: #22c55e;
+    font-size: 0.75rem;
 }
-#dealroom-custom-root .confidence-track {
-  width: 100%;
-  height: 8px;
-  background: #1b2430;
-  border-radius: 999px;
-  overflow: hidden;
-  margin-top: 8px;
+.popup-request p {
+    color: #9ca3af;
+    font-size: 0.8rem;
+    margin: 2px 0 0;
 }
-#dealroom-custom-root .confidence-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #f59e0b, #22c55e);
+.action-bar {
+    background: #10161d;
+    border: 1px solid #1f2937;
+    border-radius: 12px;
+    padding: 14px;
 }
-#dealroom-custom-root .action-note {
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  color: #bfdbfe;
-  border-radius: 8px;
-  padding: 12px 14px;
+.action-bar h3 {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
 }
-#dealroom-custom-root .warning-box {
-  background: rgba(245, 158, 11, 0.10);
-  border: 1px solid rgba(245, 158, 11, 0.22);
-  color: #fde68a;
-  border-radius: 8px;
-  padding: 12px 14px;
+.chat-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
 }
-#dealroom-custom-root .gr-button {
-  border-radius: 9px !important;
-  box-shadow: none !important;
+.quick-message {
+    flex: 1;
+    background: #0d1117 !important;
+    border: 1px solid #2b3746 !important;
+    border-radius: 8px !important;
+    color: #e5e7eb !important;
+    padding: 10px 12px !important;
 }
-#dealroom-custom-root .gr-button-primary {
-  background: #1f8b4c !important;
-  border-color: #1f8b4c !important;
+.send-btn {
+    background: #1f8b4c !important;
+    border: none !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+    font-weight: 600 !important;
 }
-#dealroom-custom-root .seat-button-row {
-  margin-top: 6px;
+.run-btn {
+    background: linear-gradient(135deg, #1f8b4c 0%, #166534 100%) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+    padding: 12px 20px !important;
 }
-#dealroom-custom-root input,
-#dealroom-custom-root textarea,
-#dealroom-custom-root select {
-  background: #0b1118 !important;
-  color: #e5e7eb !important;
-  border-color: #2b3746 !important;
+.auto-btn {
+    background: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    border-radius: 8px !important;
+    color: #e5e7eb !important;
 }
-"""
+.score-panel {
+    background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%);
+    border: 2px solid #22c55e;
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 14px;
+}
+.score-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #22c55e;
+    text-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+    line-height: 1;
+}
+.score-label {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+.score-delta {
+    font-size: 1rem;
+    color: #22c55e;
+    margin-top: 6px;
+}
+.signals-list {
+    margin-top: 12px;
+}
+.signal-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid #1f2937;
+    font-size: 0.8rem;
+}
+.signal-icon {
+    font-size: 0.85rem;
+}
+.signal-text {
+    color: #d1d5db;
+}
+.why-collapsible {
+    margin-top: 12px;
+    border-top: 1px solid #1f2937;
+    padding-top: 10px;
+}
+.why-toggle {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+}
+.why-toggle:hover {
+    color: #e5e7eb;
+}
+.why-content {
+    display: none;
+    margin-top: 8px;
+    padding: 8px;
+    background: #0d1117;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: #d1d5db;
+}
+.why-content.open {
+    display: block;
+}
+.blocker-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    margin: 3px 3px 3px 0;
+}
+.request-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    margin: 3px 3px 3px 0;
+}
+.insights-section {
+    margin-bottom: 12px;
+}
+.insights-section h4 {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px;
+}
+.step-accordion {
+    border: 1px solid #1f2937;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    overflow: hidden;
+}
+.step-accordion-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: #10161d;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.step-accordion-header:hover {
+    background: #1a2332;
+}
+.step-accordion-header.active {
+    background: rgba(34, 197, 94, 0.08);
+    border-left: 3px solid #22c55e;
+}
+.step-accordion-header.locked {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.step-number {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+.step-number.active {
+    background: #22c55e;
+    color: #0d1117;
+}
+.step-number.locked {
+    background: #374151;
+    color: #6b7280;
+}
+.step-info {
+    flex: 1;
+}
+.step-title {
+    font-weight: 600;
+    color: #f3f4f6;
+    font-size: 0.9rem;
+}
+.step-desc {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+.step-lock-icon {
+    font-size: 0.9rem;
+}
+.divider-line {
+    height: 1px;
+    background: #1f2937;
+    margin: 12px 0;
+}
+.gr-input input, .gr-input textarea, .gr-input select {
+    background: #0d1117 !important;
+    border: 1px solid #2b3746 !important;
+    color: #e5e7eb !important;
+    border-radius: 6px !important;
+}
+.gr-input label {
+    color: #9ca3af !important;
+    font-size: 0.8rem !important;
+}
+""".strip()
 
 
 class DealRoomWebManager:
-    """Shared manager that lets both Playground and Custom drive the same pool."""
-
     def __init__(self, pool: DealRoomSessionPool, metadata: EnvironmentMetadata):
         self.pool = pool
         self.metadata = metadata
@@ -375,59 +526,13 @@ class DealRoomWebManager:
     def get_state_for_session(self, session_id: str) -> Dict[str, Any]:
         return self.pool.state(session_id).model_dump()
 
-    async def reset_environment(
-        self, reset_kwargs: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        reset_kwargs = reset_kwargs or {}
-        self._playground_session_id, obs, state = self.pool.reset(
-            task_id=reset_kwargs.get("task_id", "aligned"),
-            seed=reset_kwargs.get("seed"),
-            session_id=reset_kwargs.get("episode_id") or self._playground_session_id,
-        )
-        obs.metadata["session_id"] = self._playground_session_id
-        obs_dict = obs.model_dump(exclude={"reward", "metadata"})
-        return {
-            "observation": obs_dict,
-            "reward": obs.reward,
-            "done": obs.done,
-            "session_id": self._playground_session_id,
-            "state": state.model_dump(),
-        }
-
-    async def step_environment(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
-        if not self._playground_session_id:
-            raise RuntimeError("Reset the environment before stepping.")
-        action = DealRoomAction.model_validate(action_data)
-        obs, reward, done, _info, state = self.pool.step(
-            self._playground_session_id, action
-        )
-        obs.reward = reward
-        obs.done = done
-        obs.metadata["session_id"] = self._playground_session_id
-        obs_dict = obs.model_dump(exclude={"reward", "metadata"})
-        return {
-            "observation": obs_dict,
-            "reward": reward,
-            "done": done,
-            "session_id": self._playground_session_id,
-            "state": state.model_dump(),
-        }
-
-    def get_state(self) -> Dict[str, Any]:
-        if not self._playground_session_id:
-            return DealRoomState().model_dump()
-        return self.pool.state(self._playground_session_id).model_dump()
-
 
 def load_metadata() -> EnvironmentMetadata:
     readme_path = Path("README.md")
     readme = readme_path.read_text(encoding="utf-8") if readme_path.exists() else None
     return EnvironmentMetadata(
         name="deal-room",
-        description=(
-            "A realistic multi-stakeholder enterprise negotiation environment with "
-            "hidden constraints, bounded political dynamics, and deterministic grading."
-        ),
+        description="A realistic multi-stakeholder enterprise negotiation environment.",
         version="1.0.0",
         author="akshaypulla",
         readme_content=readme,
@@ -444,6 +549,13 @@ def build_custom_tab(
 ) -> gr.Blocks:
     del action_fields, metadata, is_chat_env, title, quick_start_md
 
+    SEAT_POSITIONS = [
+        {"top": "10%", "left": "50%", "transform": "translateX(-50%)"},
+        {"top": "35%", "left": "8%"},
+        {"top": "35%", "right": "8%"},
+        {"bottom": "10%", "left": "50%", "transform": "translateX(-50%)"},
+    ]
+
     def default_view_state() -> Dict[str, Any]:
         return {
             "task": "aligned",
@@ -456,7 +568,15 @@ def build_custom_tab(
             "current_observation": None,
             "current_state": None,
             "trace": [],
-            "status_message": "Start with the simple round-table, then move to medium and hard.",
+            "status_message": "Click Open Simple to start the negotiation.",
+            "popup_queue": [],
+            "popup_index": 0,
+            "auto_advance": False,
+            "auto_delay": 5,
+            "unlocked_levels": ["simple"],
+            "show_suggestions": False,
+            "last_score": 0.0,
+            "score_delta": None,
         }
 
     def _escape(value: Any) -> str:
@@ -470,16 +590,10 @@ def build_custom_tab(
         merged.update(view_state)
         if not isinstance(merged.get("trace"), list):
             merged["trace"] = []
-        if not isinstance(merged.get("current_observation"), dict):
-            merged["current_observation"] = None
-        if not isinstance(merged.get("current_state"), dict):
-            merged["current_state"] = None
-        if merged.get("level") not in LEVEL_LABELS:
-            merged["level"] = base["level"]
-        if not isinstance(merged.get("selected_stakeholder"), (str, type(None))):
-            merged["selected_stakeholder"] = None
-        if not isinstance(merged.get("guide_step"), int):
-            merged["guide_step"] = 0
+        if not isinstance(merged.get("popup_queue"), list):
+            merged["popup_queue"] = []
+        if not isinstance(merged.get("unlocked_levels"), list):
+            merged["unlocked_levels"] = ["simple"]
         return merged
 
     def _normalize_saved_runs(saved_runs: Any) -> List[Dict[str, Any]]:
@@ -500,6 +614,10 @@ def build_custom_tab(
         selected = view_state.get("selected_stakeholder")
         if selected not in stakeholders:
             view_state["selected_stakeholder"] = _first_stakeholder_id(observation)
+
+    def _approval_band(observation: Dict[str, Any], stakeholder_id: str) -> str:
+        progress = observation.get("approval_path_progress", {}).get(stakeholder_id, {})
+        return str(progress.get("band", "neutral"))
 
     def _run_reset(
         task: str,
@@ -527,6 +645,8 @@ def build_custom_tab(
                 "current_observation": observation,
                 "current_state": state.model_dump(),
                 "selected_stakeholder": _first_stakeholder_id(observation),
+                "popup_queue": [],
+                "popup_index": 0,
                 "trace": [
                     {
                         "kind": "reset",
@@ -537,10 +657,9 @@ def build_custom_tab(
                         "blockers": list(obs.active_blockers),
                     }
                 ],
-                "status_message": (
-                    f"{LEVEL_LABELS[level]} round ready on {task} with seed {seed}. "
-                    f"Focus a stakeholder seat to inspect what they are saying."
-                ),
+                "status_message": f"Round ready. Click Run to simulate.",
+                "last_score": 0.0,
+                "score_delta": None,
             }
         )
         return updated
@@ -556,6 +675,7 @@ def build_custom_tab(
     ) -> Dict[str, Any]:
         updated = _normalize_view_state(view_state)
         trace = list(updated.get("trace", []))
+        old_score = updated.get("last_score", 0.0)
         trace.append(
             {
                 "kind": "step",
@@ -567,320 +687,97 @@ def build_custom_tab(
                 "blockers": list(obs.active_blockers),
                 "dense_reward_breakdown": info.get("dense_reward_breakdown", {}),
                 "relationship_effects": info.get("relationship_effects", []),
-                "last_action_error": info.get("last_action_error"),
             }
         )
         updated["trace"] = trace
         updated["current_observation"] = obs.model_dump()
         updated["current_state"] = state
+        updated["score_delta"] = reward - old_score if old_score else None
+        updated["last_score"] = reward
         _keep_valid_selected(updated)
+        updated["popup_queue"] = []
+        updated["popup_index"] = 0
         updated["status_message"] = (
-            f"Step {trace[-1]['step']} processed. Reward {reward:.2f}. "
-            f"{'The episode is complete.' if done else 'Continue the discussion.'}"
+            f"Step {trace[-1]['step']} | Reward: {reward:.2f} | "
+            f"{'Done!' if done else 'Continue...'}"
         )
         return updated
 
-    def _approval_band(observation: Dict[str, Any], stakeholder_id: str) -> str:
-        progress = observation.get("approval_path_progress", {}).get(stakeholder_id, {})
-        return str(progress.get("band", "neutral"))
-
-    def _band_chip(band: str) -> str:
-        css = "chip"
-        if band in {"supporter", "workable"}:
-            css += " chip--green"
-        elif band == "blocker":
-            css += " chip--red"
-        else:
-            css += " chip--amber"
-        return f"<span class='{css}'>{_escape(band)}</span>"
-
-    def _render_status_panel(view_state: Dict[str, Any]) -> str:
-        view_state = _normalize_view_state(view_state)
-        observation = view_state.get("current_observation") or {}
-        level = view_state["level"]
-        explanation = LEVEL_EXPLANATIONS[level]
-        proof_chips = "".join(
-            f"<span class='chip'>{_escape(text)}</span>"
-            for text in [
-                "dynamic stakeholders",
-                "hidden constraints",
-                "relationship propagation",
-                "partial observability",
-                "deterministic grading",
-            ]
-        )
-        steps = []
-        for current in ("simple", "medium", "hard"):
-            klass = "step-card"
-            if current == level:
-                klass += " chip--green"
-            steps.append(
-                "<div class='step-card'>"
-                f"<strong>{_escape(LEVEL_LABELS[current])}</strong>"
-                f"<p>{_escape(LEVEL_EXPLANATIONS[current]['title'])}</p>"
-                "</div>"
-            )
-        stage = observation.get("deal_stage", "not_started")
-        blockers = ", ".join(observation.get("active_blockers", [])) or "none"
-        known = ", ".join(item["id"] for item in observation.get("known_constraints", [])) or "none"
-        return (
-            "<div class='status-panel'>"
-            f"<h3>{_escape(explanation['title'])}</h3>"
-            f"<p class='soft'>{_escape(view_state.get('status_message', 'Ready.'))}</p>"
-            f"<div class='proof-row'>{proof_chips}</div>"
-            f"<div class='step-strip'>{''.join(steps)}</div>"
-            "<div class='metrics-grid' style='margin-top:12px;'>"
-            f"<div class='metric'><strong>Current level</strong><p>{_escape(LEVEL_LABELS[level])}</p></div>"
-            f"<div class='metric'><strong>Stage</strong><p>{_escape(stage)}</p></div>"
-            f"<div class='metric'><strong>Visible blockers</strong><p>{_escape(blockers)}</p></div>"
-            f"<div class='metric'><strong>Known constraints</strong><p>{_escape(known)}</p></div>"
-            "</div>"
-            "</div>"
-        )
-
-    def _render_round_table(view_state: Dict[str, Any]) -> str:
-        view_state = _normalize_view_state(view_state)
-        observation = view_state.get("current_observation") or {}
-        if not observation:
-            return (
-                "<div class='round-area'>"
-                "<div class='round-table'>"
-                "<div class='round-center'><strong>Round table not started</strong><span>Run one of the three levels to begin.</span></div>"
-                "</div></div>"
-            )
-        selected = view_state.get("selected_stakeholder")
-        seats = []
-        for index, (stakeholder_id, payload) in enumerate(observation.get("stakeholders", {}).items()):
-            if index >= len(SEAT_POSITIONS):
-                break
-            band = _approval_band(observation, stakeholder_id)
-            selected_css = " selected" if stakeholder_id == selected else ""
-            seats.append(
-                f"<div class='seat {band}{selected_css}' style='{SEAT_POSITIONS[index]}'>"
-                f"<div class='seat-icon'>{ROLE_ICONS.get(payload.get('role', ''), '👤')}</div>"
-                f"<div class='seat-name'>{_escape(payload.get('display_name', stakeholder_id))}</div>"
-                f"<div class='seat-band'>{_escape(band)}</div>"
-                "</div>"
-            )
-        level = view_state["level"]
-        center_text = {
-            "simple": "Basic grounds",
-            "medium": "Hidden friction",
-            "hard": "Realistic close pressure",
-        }[level]
-        return (
-            "<div class='round-area'>"
-            "<div class='round-table'>"
-            + "".join(seats)
-            + (
-                "<div class='round-center'>"
-                f"<strong>{_escape(TASK_DISPLAY.get(view_state['task'], view_state['task']))}</strong>"
-                f"<span>{_escape(center_text)}</span>"
-                "</div>"
-            )
-            + "</div></div>"
-        )
-
-    def _render_popup(view_state: Dict[str, Any]) -> str:
-        view_state = _normalize_view_state(view_state)
-        observation = view_state.get("current_observation") or {}
-        state = view_state.get("current_state") or {}
-        selected = view_state.get("selected_stakeholder")
-        if not observation or not selected or selected not in observation.get("stakeholders", {}):
-            return (
-                "<div class='speaker-popup'>"
-                "<h3>Stakeholder popup</h3>"
-                "<p class='soft'>Pick a seat below the round table to inspect that stakeholder's message, current asks, and approval state.</p>"
-                "</div>"
-            )
-        payload = observation["stakeholders"][selected]
-        progress = observation.get("approval_path_progress", {}).get(selected, {})
-        message = observation.get("stakeholder_messages", {}).get(selected, "No direct message yet.")
-        requested = observation.get("requested_artifacts", {}).get(selected, [])
-        weak_signals = observation.get("weak_signals", {}).get(selected, [])
-        private = state.get("stakeholder_private", {}).get(selected, {})
-        marks = private.get("permanent_marks", [])
-        mandatory_badge = "<span class='chip chip--red'>mandatory</span>" if progress.get("mandatory") else ""
-        veto_badge = "<span class='chip chip--red'>veto</span>" if payload.get("veto_power") else ""
-        return (
-            "<div class='speaker-popup'>"
-            f"<h3>{ROLE_ICONS.get(payload.get('role', ''), '👤')} {_escape(payload.get('display_name', selected))}</h3>"
-            f"<div class='proof-row'>{_band_chip(progress.get('band', 'neutral'))}"
-            f"<span class='chip'>authority {float(payload.get('authority', 0.0)):.2f}</span>"
-            f"{mandatory_badge}"
-            f"{veto_badge}"
-            "</div>"
-            f"<div class='quote'>{_escape(message)}</div>"
-            "<div class='speaker-grid'>"
-            f"<div class='metric'><strong>Why they matter</strong><p>{_escape(payload.get('role', selected))}</p></div>"
-            f"<div class='metric'><strong>Requested evidence</strong><p>{_escape(', '.join(requested) or 'none')}</p></div>"
-            f"<div class='metric'><strong>Weak signals</strong><p>{_escape('; '.join(weak_signals) or 'none')}</p></div>"
-            f"<div class='metric'><strong>Trust damage</strong><p>{_escape(', '.join(marks) or 'none')}</p></div>"
-            "</div>"
-            "</div>"
-        )
-
-    def _render_timeline(view_state: Dict[str, Any]) -> str:
-        trace = _normalize_view_state(view_state).get("trace", [])
-        if not trace:
-            return "<div class='panel'><p class='soft'>No conversation yet.</p></div>"
-        cards = []
-        for entry in trace[-8:]:
-            if entry["kind"] == "reset":
-                cards.append(
-                    "<div class='timeline-item'>"
-                    f"<strong>Reset · {_escape(entry['task'])}</strong>"
-                    f"<p>seed {entry['seed']} · stage {_escape(entry['stage'])} · blockers {_escape(', '.join(entry.get('blockers', [])) or 'none')}</p>"
-                    "</div>"
+    def _policy_action(observation: Dict[str, Any]) -> DealRoomAction:
+        obs = _coerce_observation(observation)
+        for stakeholder_id, artifacts in obs.requested_artifacts.items():
+            if artifacts:
+                artifact = artifacts[0]
+                return DealRoomAction(
+                    action_type="send_document",
+                    target=stakeholder_id,
+                    target_ids=[stakeholder_id],
+                    message=f"Sharing the requested {artifact.replace('_', ' ')}.",
+                    documents=[{"type": artifact, "specificity": "high"}],
                 )
-            else:
-                action = entry.get("action", {})
-                cards.append(
-                    "<div class='timeline-item'>"
-                    f"<strong>Step {entry['step']} · {_escape(action.get('action_type', 'action'))}</strong>"
-                    f"<p>reward {float(entry.get('reward', 0.0)):.2f} · stage {_escape(entry.get('stage', 'n/a'))} · blockers {_escape(', '.join(entry.get('blockers', [])) or 'none')}</p>"
-                    f"<p class='soft'>{_escape(action.get('message', '(no message)'))}</p>"
-                    "</div>"
-                )
-        return "<div class='timeline-grid'>" + "".join(cards) + "</div>"
-
-    def _constraint_confidence(observation: Dict[str, Any], state: Dict[str, Any]) -> str:
-        cards = []
-        known = {item["id"] for item in observation.get("known_constraints", [])}
-        for constraint_id, payload in state.get("hidden_constraints", {}).items():
-            if constraint_id in known or payload.get("status") == "known":
-                confidence = 0.95
-            elif payload.get("status") == "hinted":
-                confidence = 0.65
-            else:
-                confidence = 0.28
-            label = "high" if confidence >= 0.85 else ("medium" if confidence >= 0.55 else "low")
-            cards.append(
-                "<div class='metric'>"
-                f"<strong>{_escape(payload.get('label', constraint_id))}</strong>"
-                f"<p>{_escape(label)} confidence · status {_escape(payload.get('status', 'hidden'))}</p>"
-                "<div class='confidence-track'>"
-                f"<div class='confidence-fill' style='width:{confidence * 100:.0f}%'></div>"
-                "</div>"
-                "</div>"
+        if obs.active_blockers or not obs.known_constraints:
+            target_id = next(
+                iter(obs.active_blockers), next(iter(obs.stakeholders), "all")
             )
-        return "".join(cards) or "<div class='metric'><strong>No constraints yet</strong><p>Reset a scenario to inspect constraint confidence.</p></div>"
-
-    def _render_signals(view_state: Dict[str, Any]) -> str:
-        view_state = _normalize_view_state(view_state)
-        observation = view_state.get("current_observation") or {}
-        state = view_state.get("current_state") or {}
-        if not observation:
-            return "<div class='panel'><p class='soft'>No signals yet.</p></div>"
-        weak_cards = []
-        for stakeholder_id, signals in observation.get("weak_signals", {}).items():
-            weak_cards.append(
-                "<div class='metric'>"
-                f"<strong>{_escape(stakeholder_id)}</strong>"
-                f"<p>{_escape('; '.join(signals) or 'none')}</p>"
-                "</div>"
+            return DealRoomAction(
+                action_type="direct_message",
+                target=target_id,
+                target_ids=[target_id] if target_id != "all" else [],
+                message="Help me understand the real concern we need to address.",
             )
-        requested_cards = []
-        for stakeholder_id, artifacts in observation.get("requested_artifacts", {}).items():
-            requested_cards.append(
-                "<div class='metric'>"
-                f"<strong>{_escape(stakeholder_id)}</strong>"
-                f"<p>{_escape(', '.join(artifacts) or 'none')}</p>"
-                "</div>"
-            )
-        weak_html = "".join(weak_cards) or "<div class='metric'><strong>Weak signals</strong><p>none</p></div>"
-        requested_html = "".join(requested_cards) or "<div class='metric'><strong>Requested artifacts</strong><p>none</p></div>"
-        return (
-            "<div class='panel'>"
-            "<h3>Signals and evidence</h3>"
-            "<div class='speaker-grid'>"
-            f"{weak_html}"
-            f"{requested_html}"
-            f"{_constraint_confidence(observation, state)}"
-            "</div>"
-            "</div>"
+        return DealRoomAction(
+            action_type="group_proposal",
+            target="all",
+            target_ids=list(obs.stakeholders.keys()),
+            message="I believe we have enough aligned evidence to move to final approval.",
+            proposed_terms={
+                "price": 180000,
+                "timeline_weeks": 14,
+                "support_level": "named_support_lead",
+                "liability_cap": "mutual_cap",
+            },
         )
 
-    def _render_judge_lens(view_state: Dict[str, Any]) -> str:
-        view_state = _normalize_view_state(view_state)
-        observation = view_state.get("current_observation") or {}
-        state = view_state.get("current_state") or {}
-        if not observation:
-            return "<div class='panel'><p class='soft'>No judge lens data yet.</p></div>"
-        latest = None
-        for entry in reversed(view_state.get("trace", [])):
-            if entry.get("kind") == "step":
-                latest = entry
-                break
-        breakdown = latest.get("dense_reward_breakdown", {}) if latest else {}
-        reward_rows = "".join(
-            f"<div class='metric'><strong>{_escape(key)}</strong><p>+{float(value):.2f}</p></div>"
-            for key, value in breakdown.items()
-            if float(value) > 0
-        ) or "<div class='metric'><strong>No milestone</strong><p>No dense-reward milestone on the latest turn.</p></div>"
-        feasibility = state.get("feasibility_state", {})
-        return (
-            "<div class='panel'>"
-            "<h3>Judge lens</h3>"
-            "<div class='metrics-grid'>"
-            f"<div class='metric'><strong>Visible blockers</strong><p>{_escape(', '.join(observation.get('active_blockers', [])) or 'none')}</p></div>"
-            f"<div class='metric'><strong>Known constraints</strong><p>{_escape(', '.join(item['id'] for item in observation.get('known_constraints', [])) or 'none')}</p></div>"
-            f"<div class='metric'><strong>Hidden constraints</strong><p>{_escape(', '.join(state.get('hidden_constraints', {}).keys()) or 'none')}</p></div>"
-            f"<div class='metric'><strong>Feasibility</strong><p>{'ready' if feasibility.get('is_feasible') else 'not ready'} · {_escape(', '.join(feasibility.get('violations', [])) or 'no visible violations')}</p></div>"
-            "</div>"
-            "<h4>Latest reward breakdown</h4>"
-            f"<div class='metrics-grid'>{reward_rows}</div>"
-            "</div>"
-        )
-
-    def _render_debrief(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> str:
+    def _run_action(
+        payload: Dict[str, Any],
+        source: str,
+        view_state: Dict[str, Any],
+        saved_runs: List[Dict[str, Any]],
+    ) -> Tuple[Any, ...]:
         view_state = _normalize_view_state(view_state)
         saved_runs = _normalize_saved_runs(saved_runs)
-        observation = view_state.get("current_observation") or {}
-        state = view_state.get("current_state") or {}
-        if not observation.get("done"):
-            return (
-                "<div class='panel'>"
-                "<h3>Debrief</h3>"
-                "<p class='soft'>Finish a run to compare the terminal score and see how the round-table journey ended.</p>"
-                "</div>"
+        if not view_state.get("current_observation") or not view_state.get(
+            "session_id"
+        ):
+            view_state = _run_reset(
+                view_state["task"],
+                int(view_state["seed"]),
+                view_state["level"],
+                source,
+                view_state,
             )
-        score = CCIGrader.compute(DealRoomState.model_validate(state))
-        recent_runs = saved_runs[-2:]
-        comparison = ""
-        if len(recent_runs) >= 2:
-            comparison = (
-                f"<p class='soft'>Recent diff: {recent_runs[-2]['score']:.2f} → {recent_runs[-1]['score']:.2f}</p>"
-            )
-        return (
-            "<div class='panel'>"
-            f"<h3>Final score {score:.2f}</h3>"
-            f"{comparison}"
-            f"<div class='metrics-grid'>"
-            f"<div class='metric'><strong>Closure</strong><p>{'closed' if state.get('deal_closed') else 'failed'}</p></div>"
-            f"<div class='metric'><strong>Reason</strong><p>{_escape(state.get('failure_reason') or 'successful close')}</p></div>"
-            f"<div class='metric'><strong>Rounds used</strong><p>{state.get('round_number', 0)} / {state.get('max_rounds', 0)}</p></div>"
-            f"<div class='metric'><strong>Remaining blockers</strong><p>{_escape(', '.join(state.get('active_blockers', [])) or 'none')}</p></div>"
-            "</div>"
-            "</div>"
+        action = DealRoomAction.model_validate(payload)
+        obs, reward, done, info, state = web_manager.step_session(
+            view_state["session_id"], action
         )
-
-    def _render_level_notes(view_state: Dict[str, Any]) -> str:
-        level = _normalize_view_state(view_state)["level"]
-        details = LEVEL_EXPLANATIONS[level]
-        return (
-            f"### {details['title']}\n\n"
-            f"{details['body']}\n\n"
-            f"> Remaining gap: {details['limits']}"
+        updated = _record_step(
+            view_state, action, obs, reward, done, info, state.model_dump()
         )
+        updated["source"] = source
+        saved_runs = _save_run_if_complete(updated, saved_runs)
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
 
-    def _save_run_if_complete(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _save_run_if_complete(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         view_state = _normalize_view_state(view_state)
         saved_runs = _normalize_saved_runs(saved_runs)
         observation = view_state.get("current_observation") or {}
         if not observation.get("done"):
             return saved_runs
-        score = CCIGrader.compute(DealRoomState.model_validate(view_state.get("current_state") or {}))
+        score = CCIGrader.compute(
+            DealRoomState.model_validate(view_state.get("current_state") or {})
+        )
         run_id = f"{view_state['level']}-{view_state['task']}-{view_state['seed']}-{view_state['source']}-{len(saved_runs) + 1}"
         saved_runs = [item for item in saved_runs if item.get("id") != run_id]
         saved_runs.append(
@@ -899,533 +796,526 @@ def build_custom_tab(
         observation = _normalize_view_state(view_state).get("current_observation") or {}
         return ["all"] + list(observation.get("stakeholders", {}).keys())
 
-    def _seat_updates(view_state: Dict[str, Any]) -> List[Dict[str, Any]]:
-        observation = _normalize_view_state(view_state).get("current_observation") or {}
-        stakeholders = list(observation.get("stakeholders", {}).items())
-        selected = _normalize_view_state(view_state).get("selected_stakeholder")
-        updates: List[Dict[str, Any]] = []
-        for index in range(4):
-            if index < len(stakeholders):
-                stakeholder_id, payload = stakeholders[index]
-                updates.append(
-                    gr.update(
-                        visible=True,
-                        value=f"{ROLE_ICONS.get(payload.get('role', ''), '👤')} {payload.get('display_name', stakeholder_id)}",
-                        variant="primary" if stakeholder_id == selected else "secondary",
-                    )
-                )
-            else:
-                updates.append(gr.update(visible=False, value=f"Seat {index + 1}", variant="secondary"))
-        return updates
-
-    def _render_bundle(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        return (
-            _render_status_panel(view_state),
-            _render_round_table(view_state),
-            _render_popup(view_state),
-            _render_timeline(view_state),
-            _render_signals(view_state),
-            _render_judge_lens(view_state),
-            _render_level_notes(view_state),
-            _render_debrief(view_state, saved_runs),
-            gr.update(choices=_target_choices(view_state), value="all"),
-            *_seat_updates(view_state),
-        )
-
-    def _policy_action(observation: Dict[str, Any]) -> DealRoomAction:
-        obs = _coerce_observation(observation)
-        for stakeholder_id, artifacts in obs.requested_artifacts.items():
-            if artifacts:
-                artifact = artifacts[0]
-                return DealRoomAction(
-                    action_type="send_document",
-                    target=stakeholder_id,
-                    target_ids=[stakeholder_id],
-                    message=f"Sharing the requested {artifact.replace('_', ' ')} so your team can review this cleanly.",
-                    documents=[{"type": artifact, "specificity": "high"}],
-                )
-        if obs.active_blockers or not obs.known_constraints:
-            target_id = next(iter(obs.active_blockers), next(iter(obs.stakeholders), "all"))
-            return DealRoomAction(
-                action_type="direct_message",
-                target=target_id,
-                target_ids=[target_id] if target_id != "all" else [],
-                message="Help me understand the real approval or feasibility issue we still need to address.",
-            )
-        return DealRoomAction(
-            action_type="group_proposal",
-            target="all",
-            target_ids=list(obs.stakeholders.keys()),
-            message="I believe we have enough aligned evidence to move to final approval on concrete terms.",
-            proposed_terms={
-                "price": 180000,
-                "timeline_weeks": 14,
-                "support_level": "named_support_lead",
-                "liability_cap": "mutual_cap",
-            },
-        )
-
-    def _run_action(
-        payload: Dict[str, Any],
-        source: str,
-        view_state: Dict[str, Any],
-        saved_runs: List[Dict[str, Any]],
-    ) -> Tuple[Any, ...]:
+    def _build_round_table(view_state: Dict[str, Any]) -> str:
         view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        if not view_state.get("current_observation") or not view_state.get("session_id"):
-            view_state = _run_reset(
-                view_state["task"],
-                int(view_state["seed"]),
-                view_state["level"],
-                source,
-                view_state,
+        observation = view_state.get("current_observation") or {}
+        selected = view_state.get("selected_stakeholder")
+        popup_queue = view_state.get("popup_queue", [])
+        current_idx = view_state.get("popup_index", 0)
+        seats_html = []
+        stakeholder_list = list(observation.get("stakeholders", {}).items())
+        for index, (stakeholder_id, payload) in enumerate(stakeholder_list):
+            if index >= len(SEAT_POSITIONS):
+                break
+            band = _approval_band(observation, stakeholder_id)
+            pos = SEAT_POSITIONS[index]
+            pos_style = "; ".join(f"{k}: {v}" for k, v in pos.items())
+            is_selected = stakeholder_id == selected
+            is_speaking = (
+                len(popup_queue) > 0
+                and current_idx < len(popup_queue)
+                and popup_queue[current_idx].get("stakeholder_id") == stakeholder_id
             )
-        action = DealRoomAction.model_validate(payload)
-        obs, reward, done, info, state = web_manager.step_session(view_state["session_id"], action)
-        updated = _record_step(view_state, action, obs, reward, done, info, state.model_dump())
-        updated["source"] = source
-        saved_runs = _save_run_if_complete(updated, saved_runs)
-        return (updated, saved_runs) + _render_bundle(updated, saved_runs)
+            seat_class = "seat"
+            if band == "supporter" or band == "workable":
+                seat_class += " supporter"
+            elif band == "blocker":
+                seat_class += " blocker"
+            elif band == "uncertain":
+                seat_class += " uncertain"
+            if is_selected or is_speaking:
+                seat_class += " selected"
+            elif selected and stakeholder_id != selected:
+                seat_class += " dimmed"
+            seats_html.append(
+                f"<div class='{seat_class}' style='{pos_style}' data-stakeholder='{_escape(stakeholder_id)}'>"
+                f"<div class='seat-icon'>{ROLE_ICONS.get(payload.get('role', ''), '👤')}</div>"
+                f"<div class='seat-name'>{_escape(payload.get('display_name', stakeholder_id)[:8])}</div>"
+                f"<div class='seat-role'>{_escape(payload.get('role', '')[:10])}</div>"
+                f"</div>"
+            )
+        level_text = {"simple": "Basic", "medium": "Medium", "hard": "Hard"}.get(
+            view_state["level"], "Basic"
+        )
+        return (
+            "<div class='round-area'>"
+            + "".join(seats_html)
+            + (
+                "<div class='round-center'>"
+                f"<strong>DEAL</strong>"
+                f"<span>{level_text}</span>"
+                "</div>"
+            )
+            + "</div>"
+        )
 
-    def _render_all_state(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
+    def _build_popup(view_state: Dict[str, Any]) -> str:
+        view_state = _normalize_view_state(view_state)
+        observation = view_state.get("current_observation") or {}
+        popup_queue = view_state.get("popup_queue", [])
+        current_idx = view_state.get("popup_index", 0)
+        if not popup_queue or current_idx >= len(popup_queue):
+            if not observation:
+                return "<div class='anchored-popup' style='display:none;'></div>"
+            selected = view_state.get("selected_stakeholder")
+            if not selected or selected not in observation.get("stakeholders", {}):
+                return "<div class='anchored-popup' style='display:none;'></div>"
+            stakeholder_id = selected
+            payload = observation["stakeholders"][stakeholder_id]
+        else:
+            stakeholder_id = popup_queue[current_idx].get("stakeholder_id")
+            payload = observation.get("stakeholders", {}).get(stakeholder_id, {})
+        message = observation.get("stakeholder_messages", {}).get(
+            stakeholder_id, "No message yet."
+        )
+        requested = observation.get("requested_artifacts", {}).get(stakeholder_id, [])
+        progress = observation.get("approval_path_progress", {}).get(stakeholder_id, {})
+        band = progress.get("band", "neutral")
+        status_class = (
+            "green"
+            if band in ("supporter", "workable")
+            else ("red" if band == "blocker" else "amber")
+        )
+        status_text = {
+            "supporter": "Aligned",
+            "workable": "Aligned",
+            "blocker": "Blocking",
+            "uncertain": "Uncertain",
+            "neutral": "Neutral",
+        }.get(band, "Neutral")
+        request_text = (
+            ", ".join(r.replace("_", " ") for r in requested)
+            if requested
+            else "Nothing requested"
+        )
+        popup_content = (
+            "<div class='popup-header'>"
+            f"<div class='popup-icon'>{ROLE_ICONS.get(payload.get('role', ''), '👤')}</div>"
+            f"<div><div class='popup-name'>{_escape(payload.get('display_name', stakeholder_id))}</div>"
+            f"<div class='popup-role'>{_escape(payload.get('role', ''))}</div></div>"
+            "</div>"
+            f"<div class='popup-quote'>\"{_escape(message)}\"</div>"
+            "<div class='popup-status'>"
+            f"<div class='status-dot {status_class}'></div>"
+            f"<span style='color: #e5e7eb;'>{status_text}</span>"
+            "</div>"
+            f"<div class='popup-request'>"
+            f"<strong>Needs:</strong>"
+            f"<p>{_escape(request_text)}</p>"
+            f"</div>"
+        )
+        return f"<div class='anchored-popup'>{popup_content}</div>"
+
+    def _build_score_panel(view_state: Dict[str, Any]) -> str:
+        view_state = _normalize_view_state(view_state)
+        observation = view_state.get("current_observation") or {}
+        state = view_state.get("current_state") or {}
+        current_score = view_state.get("last_score", 0.0)
+        score_delta = view_state.get("score_delta")
+        done = observation.get("done", False)
+        if done:
+            final_score = CCIGrader.compute(DealRoomState.model_validate(state))
+            return (
+                "<div class='score-panel'>"
+                f"<div class='score-value'>{final_score:.2f}</div>"
+                "<div class='score-label'>Final Score</div>"
+                "</div>"
+            )
+        delta_html = ""
+        if score_delta is not None:
+            sign = "+" if score_delta >= 0 else ""
+            delta_color = "#22c55e" if score_delta >= 0 else "#ef4444"
+            delta_html = f"<div class='score-delta' style='color: {delta_color};'>{sign}{score_delta:.2f}</div>"
+        blockers = observation.get("active_blockers", [])
+        blocker_html = ""
+        if blockers:
+            blocker_tags = "".join(
+                f"<span class='blocker-tag'>⚠️ {_escape(b)}</span>" for b in blockers
+            )
+            blocker_html = f"<div style='margin-top:10px;'>{blocker_tags}</div>"
+        return (
+            "<div class='score-panel'>"
+            f"<div class='score-value'>{current_score:.2f}</div>"
+            "<div class='score-label'>Current Score</div>"
+            f"{delta_html}"
+            f"{blocker_html}"
+            "</div>"
+        )
+
+    def _build_signals(view_state: Dict[str, Any]) -> str:
+        view_state = _normalize_view_state(view_state)
+        observation = view_state.get("current_observation") or {}
+        if not observation:
+            return "<div class='signals-list'><div class='signal-item'><span class='signal-icon'>📊</span><span class='signal-text'>No signals yet</span></div></div>"
+        signals = []
+        for stakeholder_id, artifacts in observation.get(
+            "requested_artifacts", {}
+        ).items():
+            if artifacts:
+                for art in artifacts:
+                    signals.append(
+                        f"<span class='request-tag'>📋 {_escape(art.replace('_', ' '))}</span>"
+                    )
+        if not signals:
+            return "<div class='signals-list'><div class='signal-item'><span class='signal-icon'>📊</span><span class='signal-text'>No pending requests</span></div></div>"
+        return f"<div class='signals-list'>{''.join(signals)}</div>"
+
+    def _build_why(view_state: Dict[str, Any]) -> str:
+        view_state = _normalize_view_state(view_state)
+        observation = view_state.get("current_observation") or {}
+        blockers = observation.get("active_blockers", [])
+        if not blockers:
+            return (
+                "<div class='why-collapsible'>"
+                "<button class='why-toggle' onclick='this.nextElementSibling.classList.toggle(\"open\")'>"
+                "▼ Why this score?"
+                "</button>"
+                "<div class='why-content'>"
+                "<p>No active blockers. The negotiation is progressing well.</p>"
+                "</div>"
+                "</div>"
+            )
+        reasons = [f"• {_escape(b)} is blocking progress" for b in blockers]
+        content = "<p>" + "<br>".join(reasons) + "</p>"
+        return (
+            "<div class='why-collapsible'>"
+            "<button class='why-toggle' onclick='this.nextElementSibling.classList.toggle(\"open\")'>"
+            "▼ Why this score?"
+            "</button>"
+            f"<div class='why-content'>{content}</div>"
+            "</div>"
+        )
+
+    def _render_all_outputs(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
         view_state = _normalize_view_state(view_state)
         saved_runs = _normalize_saved_runs(saved_runs)
         _keep_valid_selected(view_state)
-        return (view_state, saved_runs) + _render_bundle(view_state, saved_runs)
-
-    def start_simple(seed: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        updated = _run_reset("aligned", int(seed), "simple", "simple", view_state)
-        return _render_all_state(updated, saved_runs)
-
-    def advance_simple(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        if view_state["level"] != "simple" or not view_state.get("current_observation"):
-            view_state = _run_reset("aligned", int(view_state["seed"]), "simple", "simple", view_state)
-        action = _policy_action(view_state["current_observation"])
-        return _run_action(action.model_dump(), "simple", view_state, saved_runs)
-
-    def start_medium(seed: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        updated = _run_reset(GUIDE_DATA["task"], int(seed), "medium", "guide", view_state)
-        updated["guide_step"] = 0
-        updated["status_message"] = "Medium round started. Use Next Guided Move to walk through the committee."
-        return _render_all_state(updated, saved_runs)
-
-    def next_medium(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        if view_state["level"] != "medium" or not view_state.get("current_observation"):
-            view_state = _run_reset(GUIDE_DATA["task"], GUIDE_DATA["seed"], "medium", "guide", view_state)
-        step_index = min(view_state.get("guide_step", 0), len(GUIDE_DATA["steps"]) - 1)
-        step = GUIDE_DATA["steps"][step_index]
-        if step.get("action") and not view_state["current_observation"].get("done"):
-            payload = DealRoomAction.model_validate(step["action"]).model_dump()
-            result = _run_action(payload, "guide", view_state, saved_runs)
-            updated = result[0]
-            updated["guide_step"] = min(step_index + 1, len(GUIDE_DATA["steps"]) - 1)
-            updated["status_message"] = f"Medium guided step {updated['guide_step']} completed: {step['title']}."
-            saved = result[1]
-            return _render_all_state(updated, saved)
-        view_state["guide_step"] = min(step_index + 1, len(GUIDE_DATA["steps"]) - 1)
-        view_state["status_message"] = f"Medium explanation step: {step['title']}."
-        return _render_all_state(view_state, saved_runs)
-
-    def take_over_medium(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        view_state["level"] = "hard"
-        view_state["source"] = "manual"
-        view_state["status_message"] = "You are now driving the same committee manually in hard-lab mode."
-        return _render_all_state(view_state, saved_runs)
-
-    def open_hard(task: str, seed: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        updated = _run_reset(task, int(seed), "hard", "manual", view_state)
-        updated["status_message"] = "Hard round ready. Use actions, baseline, or bad-move demos."
-        return _render_all_state(updated, saved_runs)
-
-    def refresh_hard(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        session_id = view_state.get("session_id")
-        if session_id and web_manager.pool.has_session(session_id):
-            view_state["current_state"] = web_manager.get_state_for_session(session_id)
-            view_state["status_message"] = "Refreshed the state from the active round."
-        return _render_all_state(view_state, saved_runs)
-
-    def focus_seat(index: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        stakeholders = list((view_state.get("current_observation") or {}).get("stakeholders", {}).keys())
-        if index < len(stakeholders):
-            view_state["selected_stakeholder"] = stakeholders[index]
-            view_state["status_message"] = f"Focused {stakeholders[index]}."
-        return _render_all_state(view_state, saved_runs)
-
-    def suggest_action(view_state: Dict[str, Any]) -> str:
-        view_state = _normalize_view_state(view_state)
-        if not view_state.get("current_observation"):
-            return "Open a round first to generate a suggested move."
-        if view_state["current_observation"].get("done"):
-            return "The round is already complete."
-        action = _policy_action(view_state["current_observation"])
+        targets = _target_choices(view_state)
         return (
-            f"**Suggested next action:** `{action.action_type}` to "
-            f"`{', '.join(action.target_ids) or action.target}`\n\n{action.message}"
+            _build_round_table(view_state),
+            _build_popup(view_state),
+            _build_score_panel(view_state),
+            _build_signals(view_state),
+            _build_why(view_state),
+            gr.update(choices=targets, value="all"),
         )
 
-    def step_baseline(view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
+    def _render_insights_panel(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
         view_state = _normalize_view_state(view_state)
-        if not view_state.get("current_observation"):
-            task = view_state.get("task") or LEVEL_TO_TASK.get(view_state["level"], "hostile_acquisition")
-            view_state = _run_reset(task, int(view_state["seed"]), view_state["level"], "baseline", view_state)
-        action = _policy_action(view_state["current_observation"])
-        return _run_action(action.model_dump(), "baseline", view_state, saved_runs)
+        return (
+            _build_score_panel(view_state),
+            _build_signals(view_state),
+            _build_why(view_state),
+        )
 
-    def run_baseline(task: str, seed: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
-        working = _run_reset(task, int(seed), "hard", "baseline", view_state)
-        step_guard = 0
-        while (
-            working.get("current_observation")
-            and not working["current_observation"].get("done")
-            and step_guard < int(working["current_observation"].get("max_rounds", 10)) + 2
-        ):
-            action = _policy_action(working["current_observation"])
-            obs, reward, done, info, state = web_manager.step_session(working["session_id"], action)
-            working = _record_step(working, action, obs, reward, done, info, state.model_dump())
-            working["source"] = "baseline"
-            step_guard += 1
-            if done:
-                break
-        saved_runs = _save_run_if_complete(working, saved_runs)
-        return _render_all_state(working, saved_runs)
-
-    def submit_quick_action(
+    def handle_reset(
         task: str,
         seed: int,
-        action_type: str,
-        target: str,
-        message: str,
-        document_type: str,
-        price: float,
-        timeline_weeks: float,
-        support_level: str,
-        liability_cap: str,
+        level: str,
         view_state: Dict[str, Any],
         saved_runs: List[Dict[str, Any]],
     ) -> Tuple[Any, ...]:
         view_state = _normalize_view_state(view_state)
-        if (
-            not view_state.get("current_observation")
-            or view_state.get("task") != task
-            or int(view_state.get("seed", 0)) != int(seed)
-        ):
-            view_state = _run_reset(task, int(seed), "hard", "manual", view_state)
-        payload: Dict[str, Any] = {
-            "action_type": action_type,
-            "target": target,
-            "target_ids": [] if target == "all" else [target],
-            "message": message,
-        }
-        if document_type and document_type != "none":
-            payload["documents"] = [{"type": document_type, "specificity": "high"}]
-        if action_type == "group_proposal":
-            payload["proposed_terms"] = {
-                "price": int(price) if price else 180000,
-                "timeline_weeks": int(timeline_weeks) if timeline_weeks else 14,
-                "support_level": support_level or "named_support_lead",
-                "liability_cap": liability_cap or "mutual_cap",
-            }
-        return _run_action(payload, "manual", view_state, saved_runs)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        updated = _run_reset(task, int(seed), level, level, view_state)
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
 
-    def submit_advanced_json(raw_action: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]) -> Tuple[Any, ...]:
+    def handle_step(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
         view_state = _normalize_view_state(view_state)
-        try:
-            payload = json.loads(raw_action)
-        except json.JSONDecodeError as exc:
-            view_state["status_message"] = f"Invalid JSON action: {exc}"
-            return _render_all_state(view_state, saved_runs)
-        return _run_action(payload, "advanced_json", view_state, saved_runs)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        if not view_state.get("current_observation") or not view_state.get(
+            "session_id"
+        ):
+            updated = _run_reset(
+                view_state["task"],
+                int(view_state["seed"]),
+                view_state["level"],
+                view_state["level"],
+                view_state,
+            )
+            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+        action = _policy_action(view_state["current_observation"])
+        return _run_action(action.model_dump(), "auto", view_state, saved_runs)
 
-    def load_bad_move(kind: str) -> str:
-        if kind == "close":
-            payload = {
-                "action_type": "group_proposal",
-                "target": "all",
-                "target_ids": [],
-                "message": "We should sign now and handle the remaining details later.",
-            }
-        elif kind == "ignore":
-            payload = {
-                "action_type": "direct_message",
-                "target": "finance",
-                "target_ids": ["finance"],
-                "message": "Let us finalize commercials now and come back to legal after approval.",
-            }
-        else:
-            payload = {
-                "action_type": "send_document",
-                "target": "finance",
-                "target_ids": ["finance"],
-                "message": "Sending something generic even though it was not requested.",
-                "documents": [{"type": "support_plan", "specificity": "low"}],
-            }
-        return json.dumps(payload, indent=2)
+    def handle_send_message(
+        message: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        if not view_state.get("current_observation") or not view_state.get(
+            "session_id"
+        ):
+            updated = _run_reset(
+                view_state["task"],
+                int(view_state["seed"]),
+                view_state["level"],
+                view_state["level"],
+                view_state,
+            )
+            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+        action = DealRoomAction(
+            action_type="direct_message",
+            target="all",
+            target_ids=[],
+            message=message,
+        )
+        return _run_action(action.model_dump(), "manual", view_state, saved_runs)
 
-    with gr.Blocks(elem_id="dealroom-custom-root") as demo:
+    def handle_seat_click(
+        stakeholder_id: str,
+        view_state: Dict[str, Any],
+        saved_runs: List[Dict[str, Any]],
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        view_state["selected_stakeholder"] = stakeholder_id
+        view_state["popup_index"] = 0
+        view_state["popup_queue"] = [{"stakeholder_id": stakeholder_id}]
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_next_popup(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        popup_queue = view_state.get("popup_queue", [])
+        current_idx = view_state.get("popup_index", 0)
+        if current_idx < len(popup_queue) - 1:
+            view_state["popup_index"] = current_idx + 1
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_auto_advance_toggle(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        view_state["auto_advance"] = not view_state.get("auto_advance", False)
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_focus_seat(
+        index: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        stakeholders = list(
+            (view_state.get("current_observation") or {}).get("stakeholders", {}).keys()
+        )
+        if index < len(stakeholders):
+            stakeholder_id = stakeholders[index]
+            view_state["selected_stakeholder"] = stakeholder_id
+            view_state["popup_index"] = 0
+            view_state["popup_queue"] = [{"stakeholder_id": stakeholder_id}]
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_open_level(
+        level: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        task_map = {
+            "simple": "aligned",
+            "medium": GUIDE_DATA["task"],
+            "hard": "hostile_acquisition",
+        }
+        task = task_map.get(level, "aligned")
+        seed = view_state.get("seed", 42)
+        updated = _run_reset(task, int(seed), level, level, view_state)
+        if level not in updated.get("unlocked_levels", []):
+            updated["unlocked_levels"] = updated.get("unlocked_levels", []) + [level]
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+
+    def handle_unlock_level(
+        level: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        if level not in view_state.get("unlocked_levels", []):
+            view_state["unlocked_levels"] = view_state.get("unlocked_levels", []) + [
+                level
+            ]
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    demo = gr.Blocks(elem_classes=["dealroom-custom"])
+    with demo:
         gr.HTML(f"<style>{CUSTOM_CSS}</style>")
+
         view_state = gr.State(default_view_state())
         saved_runs = gr.State([])
 
-        gr.HTML(
-            """
-            <div class="dealroom-shell">
-              <div class="hero">
-                <h1>DealRoom Custom Lab</h1>
-                <p>
-                  This page teaches the environment as a round-table conference. Start with a basic discussion,
-                  move into hidden-friction committee dynamics, and finish in the full enterprise lab.
-                  The Playground stays untouched; this tab is the guided learning layer.
-                </p>
-                <div class="proof-row">
-                  <span class="chip">round-table view</span>
-                  <span class="chip">stakeholder popups</span>
-                  <span class="chip">simple → medium → hard</span>
-                  <span class="chip">judge lens</span>
-                </div>
-              </div>
-            </div>
-            """
-        )
+        with gr.Column():
+            gr.HTML(
+                "<div style='text-align:center;padding:16px 0 8px;'>"
+                "<h1 style='margin:0;color:#f3f4f6;font-size:1.5rem;'>🎯 DealRoom Lab</h1>"
+                "<p style='margin:6px 0 0;color:#9ca3af;font-size:0.9rem;'>Negotiate with stakeholders • Close the deal</p>"
+                "</div>"
+            )
 
-        status_html = gr.HTML()
+            progress_html = gr.HTML()
 
-        with gr.Row():
-            with gr.Column(scale=4):
-                with gr.Accordion("Step 1 · Simple Round", open=True):
-                    gr.Markdown(
-                        "Run a small aligned committee first. This is the basic conversation loop: listen, clarify, and answer with one concrete artifact."
-                    )
-                    simple_seed = gr.Number(value=42, precision=0, label="Simple seed", info="Keeps the simple committee reproducible.")
-                    with gr.Row():
-                        simple_run_btn = gr.Button("Run Simple Round", variant="primary")
-                        simple_step_btn = gr.Button("Advance Simple Turn")
-                    gr.Markdown(
-                        "> Limitation: this is still a light version of enterprise negotiation. Fewer stakeholders and less internal politics make it easier than the real thing."
-                    )
-
-                with gr.Accordion("Step 2 · Medium Round", open=False):
-                    gr.Markdown(
-                        "Use the curated conflicted walkthrough to see hidden constraints, blocker sequencing, and why committee management matters."
-                    )
-                    medium_seed = gr.Number(value=GUIDE_DATA["seed"], precision=0, label="Medium seed", info="Seeded walkthrough for the conflicted scenario.")
-                    with gr.Row():
-                        medium_run_btn = gr.Button("Run Medium Round", variant="primary")
-                        medium_next_btn = gr.Button("Next Guided Move")
-                    medium_takeover_btn = gr.Button("Take Over Manually")
-                    gr.Markdown(
-                        f"**Walkthrough focus:** {GUIDE_DATA['summary']}\n\n"
-                        "> Limitation: this adds real friction, but stakeholders are still bounded state-update agents rather than fully autonomous strategic planners."
-                    )
-
-                with gr.Accordion("Step 3 · Hard Round", open=False):
-                    gr.Markdown(
-                        "The hard lab is the closest to the full environment. Use manual actions, baseline actions, or deliberately bad moves to understand what the grader is rewarding."
-                    )
-                    hard_task = gr.Dropdown(
-                        TASK_ORDER,
-                        value="hostile_acquisition",
-                        label="Hard task",
-                        info="Choose the task you want to drive manually in the hard lab.",
-                    )
-                    hard_seed = gr.Number(value=42, precision=0, label="Hard seed", info="Use a fixed seed when you want clean comparisons.")
-                    with gr.Row():
-                        hard_open_btn = gr.Button("Open Hard Lab", variant="primary")
-                        hard_refresh_btn = gr.Button("Refresh Current Round")
-
-                    suggestion_md = gr.Markdown("Open a hard round to get a suggested next move.")
-                    with gr.Row():
-                        suggest_btn = gr.Button("Suggest Next Action")
-                        baseline_step_btn = gr.Button("Baseline Step")
-                        baseline_run_btn = gr.Button("Run Baseline Episode")
-
-                    gr.Markdown("### Hard-lab action composer")
-                    action_type = gr.Dropdown(
-                        [
-                            "direct_message",
-                            "send_document",
-                            "backchannel",
-                            "group_proposal",
-                            "concession",
-                            "walkaway_signal",
-                            "reframe_value_prop",
-                            "exec_escalation",
-                        ],
-                        value="direct_message",
-                        label="Action type",
-                        info="The move you want the agent to make this turn.",
-                    )
-                    target_dropdown = gr.Dropdown(["all"], value="all", label="Target", info="Choose which stakeholder seat this move addresses.")
-                    message_box = gr.Textbox(
-                        value="I want to make sure we are addressing the real approval concern before we push this forward.",
-                        lines=3,
-                        label="Message",
-                        info="This is the text the agent sends to the committee.",
-                    )
-                    document_type = gr.Dropdown(
-                        ["none", "roi_model", "implementation_timeline", "security_cert", "dpa", "vendor_packet", "reference_case", "support_plan"],
-                        value="none",
-                        label="Document",
-                        info="Attach a specific artifact when the move is document-driven.",
-                    )
-                    with gr.Row():
-                        price_input = gr.Number(value=180000, precision=0, label="Price")
-                        timeline_input = gr.Number(value=14, precision=0, label="Timeline weeks")
-                    with gr.Row():
-                        support_level = gr.Dropdown(
-                            ["named_support_lead", "priority", "standard"],
-                            value="named_support_lead",
-                            label="Support level",
-                        )
-                        liability_cap = gr.Dropdown(
-                            ["mutual_cap", "standard_cap", "custom_cap"],
-                            value="mutual_cap",
-                            label="Liability cap",
-                        )
-                    hard_send_btn = gr.Button("Send Hard-Lab Action", variant="primary")
-
-                    gr.Markdown("### Counterfactual bad moves")
-                    with gr.Row():
-                        bad_close_btn = gr.Button("Close Too Early")
-                        bad_ignore_btn = gr.Button("Ignore Legal")
-                        bad_irrelevant_btn = gr.Button("Send Wrong Artifact")
-                    advanced_json = gr.Textbox(
-                        label="Advanced JSON action",
-                        lines=10,
-                        info="Use this when you want to submit a raw structured action payload.",
-                    )
-                    advanced_submit_btn = gr.Button("Submit Advanced JSON")
-
-            with gr.Column(scale=6):
-                gr.HTML("<div class='panel'><h3>Round table conference</h3><p class='soft'>Click a stakeholder seat to open their popup and inspect what they are saying in the current round.</p></div>")
-                with gr.Row(elem_classes=["seat-button-row"]):
-                    gr.Column(scale=2)
-                    seat_btn_0 = gr.Button("Seat 1", visible=False)
-                    gr.Column(scale=2)
-                with gr.Row():
-                    seat_btn_1 = gr.Button("Seat 2", visible=False)
+            with gr.Row():
+                with gr.Column(scale=7):
                     table_html = gr.HTML()
-                    seat_btn_2 = gr.Button("Seat 3", visible=False)
-                with gr.Row(elem_classes=["seat-button-row"]):
-                    gr.Column(scale=2)
-                    seat_btn_3 = gr.Button("Seat 4", visible=False)
-                    gr.Column(scale=2)
+                    popup_html = gr.HTML()
 
-                popup_html = gr.HTML()
-                level_notes = gr.Markdown()
-                timeline_html = gr.HTML()
-                signals_html = gr.HTML()
-                judge_html = gr.HTML()
-                debrief_html = gr.HTML()
+                    gr.HTML("<div class='action-bar'>")
+                    gr.HTML("<h3>🎮 Actions</h3>")
 
-        render_outputs = [
-            status_html,
+                    with gr.Row(elem_classes=["chat-input-row"]):
+                        message_input = gr.Textbox(
+                            placeholder="Type your message...",
+                            lines=2,
+                            elem_classes=["quick-message"],
+                        )
+                        send_btn = gr.Button(
+                            "📤 Send", elem_classes=["send-btn"], variant="primary"
+                        )
+
+                    gr.HTML("<div class='divider-line'></div>")
+
+                    with gr.Row():
+                        run_btn = gr.Button(
+                            "▶ Run Round", elem_classes=["run-btn"], variant="primary"
+                        )
+                        step_btn = gr.Button("⏭ Step", elem_classes=["auto-btn"])
+                        auto_toggle_btn = gr.Button("⏵ Auto", elem_classes=["auto-btn"])
+
+                    gr.HTML("</div>")
+
+                with gr.Column(scale=3):
+                    score_html = gr.HTML()
+                    signals_html = gr.HTML()
+                    why_html = gr.HTML()
+
+        outputs = [
+            view_state,
+            saved_runs,
             table_html,
             popup_html,
-            timeline_html,
+            score_html,
             signals_html,
-            judge_html,
-            level_notes,
-            debrief_html,
-            target_dropdown,
-            seat_btn_0,
-            seat_btn_1,
-            seat_btn_2,
-            seat_btn_3,
+            why_html,
         ]
 
-        full_outputs = [view_state, saved_runs] + render_outputs
+        def render_initial(vs, sr):
+            vs = _normalize_view_state(vs)
+            sr = _normalize_saved_runs(sr)
+            return (vs, sr) + _render_all_outputs(vs, sr)
+
+        def render_progress(vs, sr):
+            vs = _normalize_view_state(vs)
+            sr = _normalize_saved_runs(sr)
+            unlocked = vs.get("unlocked_levels", ["simple"])
+            current = vs.get("level", "simple")
+            steps_html = ""
+            for level in ["simple", "medium", "hard"]:
+                is_active = level == current
+                is_unlocked = level in unlocked
+                cls = "active" if is_active else ("locked" if not is_unlocked else "")
+                icon = "🔓" if is_unlocked else "🔒"
+                label = LEVEL_LABELS.get(level, level)
+                hint = {
+                    "simple": "Start here",
+                    "medium": "Complete Simple",
+                    "hard": "Complete Medium",
+                }.get(level, "")
+                hint_html = (
+                    f'<span class="unlock-hint">{hint}</span>'
+                    if hint and not is_unlocked
+                    else ""
+                )
+                steps_html += (
+                    f"<div class='progress-step {cls}' data-level='{level}'>"
+                    f"{icon} {label}"
+                    f"{hint_html}"
+                    f"</div>"
+                )
+            return f"<div class='progress-strip'>{steps_html}</div>"
+
+        demo.load(fn=render_initial, inputs=[view_state, saved_runs], outputs=outputs)
+
+        def on_load_update(vs, sr):
+            vs = _normalize_view_state(vs)
+            sr = _normalize_saved_runs(sr)
+            return (render_progress(vs, sr),) + tuple(_render_insights_panel(vs, sr))
 
         demo.load(
-            fn=lambda vs, sr: _render_all_state(vs, sr),
+            fn=on_load_update,
             inputs=[view_state, saved_runs],
-            outputs=full_outputs,
+            outputs=[progress_html, score_html, signals_html, why_html],
         )
 
-        simple_run_btn.click(
-            fn=start_simple,
-            inputs=[simple_seed, view_state, saved_runs],
-            outputs=full_outputs,
-        )
-        simple_step_btn.click(
-            fn=advance_simple,
+        simple_open_btn = gr.Button("Open Simple", visible=True)
+        medium_open_btn = gr.Button("Open Medium", visible=True)
+        hard_open_btn = gr.Button("Open Hard", visible=True)
+
+        def update_buttons(vs, sr):
+            vs = _normalize_view_state(vs)
+            sr = _normalize_saved_runs(sr)
+            unlocked = vs.get("unlocked_levels", ["simple"])
+            return (
+                gr.update(visible="simple" in unlocked),
+                gr.update(visible="medium" in unlocked),
+                gr.update(visible="hard" in unlocked),
+            )
+
+        demo.load(
+            fn=update_buttons,
             inputs=[view_state, saved_runs],
-            outputs=full_outputs,
+            outputs=[simple_open_btn, medium_open_btn, hard_open_btn],
         )
 
-        medium_run_btn.click(
-            fn=start_medium,
-            inputs=[medium_seed, view_state, saved_runs],
-            outputs=full_outputs,
+        simple_open_btn.click(
+            fn=handle_open_level,
+            inputs=[gr.State("simple"), view_state, saved_runs],
+            outputs=outputs,
         )
-        medium_next_btn.click(
-            fn=next_medium,
-            inputs=[view_state, saved_runs],
-            outputs=full_outputs,
+        medium_open_btn.click(
+            fn=handle_open_level,
+            inputs=[gr.State("medium"), view_state, saved_runs],
+            outputs=outputs,
         )
-        medium_takeover_btn.click(
-            fn=take_over_medium,
-            inputs=[view_state, saved_runs],
-            outputs=full_outputs,
-        )
-
         hard_open_btn.click(
-            fn=open_hard,
-            inputs=[hard_task, hard_seed, view_state, saved_runs],
-            outputs=full_outputs,
-        )
-        hard_refresh_btn.click(
-            fn=refresh_hard,
-            inputs=[view_state, saved_runs],
-            outputs=full_outputs,
-        )
-        suggest_btn.click(fn=suggest_action, inputs=[view_state], outputs=[suggestion_md])
-        baseline_step_btn.click(
-            fn=step_baseline,
-            inputs=[view_state, saved_runs],
-            outputs=full_outputs,
-        )
-        baseline_run_btn.click(
-            fn=run_baseline,
-            inputs=[hard_task, hard_seed, view_state, saved_runs],
-            outputs=full_outputs,
-        )
-        hard_send_btn.click(
-            fn=submit_quick_action,
-            inputs=[
-                hard_task,
-                hard_seed,
-                action_type,
-                target_dropdown,
-                message_box,
-                document_type,
-                price_input,
-                timeline_input,
-                support_level,
-                liability_cap,
-                view_state,
-                saved_runs,
-            ],
-            outputs=full_outputs,
-        )
-        advanced_submit_btn.click(
-            fn=submit_advanced_json,
-            inputs=[advanced_json, view_state, saved_runs],
-            outputs=full_outputs,
+            fn=handle_open_level,
+            inputs=[gr.State("hard"), view_state, saved_runs],
+            outputs=outputs,
         )
 
-        bad_close_btn.click(fn=lambda: load_bad_move("close"), outputs=[advanced_json])
-        bad_ignore_btn.click(fn=lambda: load_bad_move("ignore"), outputs=[advanced_json])
-        bad_irrelevant_btn.click(fn=lambda: load_bad_move("artifact"), outputs=[advanced_json])
+        run_btn.click(
+            fn=handle_step,
+            inputs=[view_state, saved_runs],
+            outputs=outputs,
+        )
 
-        seat_btn_0.click(fn=lambda vs, sr: focus_seat(0, vs, sr), inputs=[view_state, saved_runs], outputs=full_outputs)
-        seat_btn_1.click(fn=lambda vs, sr: focus_seat(1, vs, sr), inputs=[view_state, saved_runs], outputs=full_outputs)
-        seat_btn_2.click(fn=lambda vs, sr: focus_seat(2, vs, sr), inputs=[view_state, saved_runs], outputs=full_outputs)
-        seat_btn_3.click(fn=lambda vs, sr: focus_seat(3, vs, sr), inputs=[view_state, saved_runs], outputs=full_outputs)
+        step_btn.click(
+            fn=handle_step,
+            inputs=[view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        auto_toggle_btn.click(
+            fn=handle_auto_advance_toggle,
+            inputs=[view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        send_btn.click(
+            fn=handle_send_message,
+            inputs=[message_input, view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        for i in range(4):
+            btn = gr.Button(f"Seat {i + 1}", visible=True)
+            btn.click(
+                fn=handle_focus_seat,
+                inputs=[gr.State(i), view_state, saved_runs],
+                outputs=outputs,
+            )
 
     return demo

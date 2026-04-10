@@ -1,0 +1,93 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f4e21]:
+    - main [ref=f4e22]:
+      - generic [ref=f4e32]:
+        - generic [ref=f4e39]:
+          - 'heading "OpenEnv Agentic Environment: DealRoom" [level=1] [ref=f4e40]'
+          - generic [ref=f4e41]: Classic Playground for the multi-stakeholder enterprise negotiation simulator.
+        - generic [ref=f4e42]:
+          - generic [ref=f4e43]:
+            - generic [ref=f4e44]:
+              - button [ref=f4e45] [cursor=pointer]: Playground
+              - button [ref=f4e46] [cursor=pointer]: Custom
+            - tablist [ref=f4e47]:
+              - tab "Playground" [ref=f4e48] [cursor=pointer]
+              - tab "Custom" [selected] [ref=f4e49] [cursor=pointer]
+          - tabpanel [ref=f4e259]:
+            - generic [ref=f4e260]:
+              - generic [ref=f4e263]:
+                - generic [ref=f4e267]:
+                  - heading "🎯 DealRoom Lab" [level=1] [ref=f4e268]
+                  - paragraph [ref=f4e269]: Negotiate with stakeholders • Close the deal
+                - generic [ref=f4e273]:
+                  - generic [ref=f4e274]: 🔓 Simple
+                  - generic [ref=f4e275]:
+                    - text: 🔒 Medium
+                    - generic [ref=f4e276]: Complete Simple
+                  - generic [ref=f4e277]:
+                    - text: 🔒 Hard
+                    - generic [ref=f4e278]: Complete Medium
+                - generic [ref=f4e279]:
+                  - generic [ref=f4e280]:
+                    - generic [ref=f4e284]:
+                      - generic [ref=f4e285] [cursor=pointer]:
+                        - generic [ref=f4e340]: 💰
+                        - generic [ref=f4e341]: Jon (Fin
+                        - generic [ref=f4e342]: finance
+                      - generic [ref=f4e343] [cursor=pointer]:
+                        - generic [ref=f4e344]: 🎯
+                        - generic [ref=f4e345]: Sofia (E
+                        - generic [ref=f4e346]: executive_
+                      - generic [ref=f4e347]:
+                        - strong [ref=f4e348]: DEAL
+                        - generic [ref=f4e349]: Basic
+                    - generic [ref=f4e350]:
+                      - generic [ref=f4e351]:
+                        - generic [ref=f4e352]: 💰
+                        - generic [ref=f4e353]:
+                          - generic [ref=f4e354]: Jon (Finance Lead)
+                          - generic [ref=f4e355]: finance
+                      - generic [ref=f4e356]: "\"I need clarity on business impact and spend discipline before this can move.\""
+                      - generic [ref=f4e359]: Neutral
+                      - generic [ref=f4e360]:
+                        - strong [ref=f4e361]: "Needs:"
+                        - paragraph [ref=f4e362]: roi model, reference case
+                    - heading "🎮 Actions" [level=3] [ref=f4e297]
+                    - generic [ref=f4e298]:
+                      - generic [ref=f4e301]:
+                        - generic [ref=f4e302]: Textbox
+                        - textbox "Textbox" [ref=f4e304]:
+                          - /placeholder: Type your message...
+                      - button "📤 Send" [ref=f4e305] [cursor=pointer]
+                    - generic [ref=f4e310]:
+                      - button "▶ Run Round" [ref=f4e311] [cursor=pointer]
+                      - button "⏭ Step" [ref=f4e312] [cursor=pointer]
+                      - button "⏵ Auto" [ref=f4e313] [cursor=pointer]
+                  - generic [ref=f4e316]:
+                    - generic [ref=f4e320]:
+                      - generic [ref=f4e321]: "0.00"
+                      - generic [ref=f4e322]: Current Score
+                    - generic [ref=f4e326]:
+                      - generic [ref=f4e363]: 📋 roi model
+                      - generic [ref=f4e364]: 📋 reference case
+                      - generic [ref=f4e365]: 📋 roi model
+                      - generic [ref=f4e366]: 📋 implementation timeline
+                    - button "▼ Why this score?" [ref=f4e334] [cursor=pointer]
+              - button "Open Simple" [active] [ref=f4e335] [cursor=pointer]
+              - button "Seat 1" [ref=f4e336] [cursor=pointer]
+              - button "Seat 2" [ref=f4e337] [cursor=pointer]
+              - button "Seat 3" [ref=f4e338] [cursor=pointer]
+              - button "Seat 4" [ref=f4e339] [cursor=pointer]
+    - contentinfo "Gradio footer navigation" [ref=f4e23]:
+      - button "Use via API logo" [ref=f4e24] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f4e25]
+      - generic [ref=f4e26]: ·
+      - link "Built with Gradio logo" [ref=f4e27] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f4e28]
+      - generic [ref=f4e29]: ·
+      - button "Settings Settings" [ref=f4e30] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f4e31]

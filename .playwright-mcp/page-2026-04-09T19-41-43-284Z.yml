@@ -1,0 +1,29 @@
+- iframe [ref=e2]:
+  - generic [ref=f2e4]:
+    - generic [ref=f2e5]:
+      - img [ref=f2e9]
+      - paragraph [ref=f2e20]: Loading...
+    - generic [ref=f2e21]:
+      - main [ref=f2e22]:
+        - generic [ref=f2e28]:
+          - generic [ref=f2e29]:
+            - generic [ref=f2e30]:
+              - button [ref=f2e31] [cursor=pointer]: Playground
+              - button [ref=f2e32] [cursor=pointer]: Custom
+            - tablist [ref=f2e33]:
+              - tab "Playground" [selected] [ref=f2e34] [cursor=pointer]
+              - tab "Custom" [ref=f2e35] [cursor=pointer]
+          - tabpanel [ref=f2e36]
+      - contentinfo "Gradio footer navigation" [ref=f2e40]:
+        - button "Use via API logo" [ref=f2e41] [cursor=pointer]:
+          - text: Use via API
+          - img "logo" [ref=f2e42]
+        - generic [ref=f2e43]: ·
+        - link "Built with Gradio logo" [ref=f2e44] [cursor=pointer]:
+          - /url: https://gradio.app
+          - text: Built with Gradio
+          - img "logo" [ref=f2e45]
+        - generic [ref=f2e46]: ·
+        - button "Settings Settings" [ref=f2e47] [cursor=pointer]:
+          - text: Settings
+          - img "Settings" [ref=f2e48]
