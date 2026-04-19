@@ -1,0 +1,44 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f1e21]:
+    - main [ref=f1e22]:
+      - generic [ref=f1e32]:
+        - generic [ref=f1e39]:
+          - 'heading "OpenEnv Agentic Environment: DealRoom" [level=1] [ref=f1e40]'
+          - generic [ref=f1e41]: Classic Playground for the multi-stakeholder enterprise negotiation simulator.
+        - generic [ref=f1e42]:
+          - generic [ref=f1e43]:
+            - generic [ref=f1e44]:
+              - button [ref=f1e45] [cursor=pointer]: Playground
+              - button [ref=f1e46] [cursor=pointer]: Custom
+            - tablist [ref=f1e47]:
+              - tab "Playground" [ref=f1e48] [cursor=pointer]
+              - tab "Custom" [active] [selected] [ref=f1e49] [cursor=pointer]
+          - tabpanel [ref=f1e259]:
+            - generic [ref=f1e260]:
+              - generic [ref=f1e266]:
+                - heading "🎯 DealRoom Lab" [level=1] [ref=f1e267]
+                - paragraph [ref=f1e268]: Negotiate with stakeholders • Close the deal
+              - generic [ref=f1e269]:
+                - generic [ref=f1e273] [cursor=pointer]:
+                  - text: 🔓 Simple
+                  - generic [ref=f1e274]: Start here
+                - generic [ref=f1e278]:
+                  - text: ⚪ Medium
+                  - generic [ref=f1e279]: Available after Simple
+                - generic [ref=f1e283]:
+                  - text: ⚪ Hard
+                  - generic [ref=f1e284]: Available after Medium
+              - button "▶ Start Simple Round" [ref=f1e285] [cursor=pointer]
+    - contentinfo "Gradio footer navigation" [ref=f1e23]:
+      - button "Use via API logo" [ref=f1e24] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f1e25]
+      - generic [ref=f1e26]: ·
+      - link "Built with Gradio logo" [ref=f1e27] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f1e28]
+      - generic [ref=f1e29]: ·
+      - button "Settings Settings" [ref=f1e30] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f1e31]

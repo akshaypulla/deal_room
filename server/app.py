@@ -8,7 +8,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from models import DealRoomAction
@@ -50,12 +50,12 @@ def _web_shell_html() -> str:
         </style>
       </head>
       <body>
-        <iframe id="dealroom-ui-frame" src="/ui/" title="DealRoom Web UI"></iframe>
+        <iframe id="dealroom-ui-frame" src="/__gradio_ui__/" title="DealRoom Web UI"></iframe>
         <script>
           const search = window.location.search || "";
           const frame = document.getElementById("dealroom-ui-frame");
           if (frame && search) {
-            frame.src = "/ui/" + search;
+            frame.src = "/__gradio_ui__/" + search;
           }
         </script>
       </body>
@@ -65,17 +65,20 @@ def _web_shell_html() -> str:
 
 @app.get("/")
 async def root():
-    return HTMLResponse(_web_shell_html())
+    """Redirect root to /web"""
+    return RedirectResponse(url="/web", status_code=302)
 
 
 @app.get("/web")
 async def web_shell():
+    """Main entry point - the only valid URL for the web interface"""
     return HTMLResponse(_web_shell_html())
 
 
 @app.get("/web/")
 async def web_shell_slash():
-    return HTMLResponse(_web_shell_html())
+    """Main entry point with trailing slash - redirects to /web"""
+    return RedirectResponse(url="/web", status_code=302)
 
 
 class ResetRequest(BaseModel):
@@ -155,7 +158,9 @@ async def step(request: Request, response: Response, action: DealRoomAction):
     try:
         session_id = _resolve_session_id(request, action=action)
         if not session_id or not _sessions.has_session(session_id):
-            raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
+            raise HTTPException(
+                status_code=400, detail="No active session. Call /reset first."
+            )
         obs, reward, done, info, _state = _sessions.step(session_id, action)
         info["session_id"] = session_id
         obs.metadata["session_id"] = session_id
@@ -169,23 +174,35 @@ async def step(request: Request, response: Response, action: DealRoomAction):
     except HTTPException:
         raise
     except KeyError:
-        raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
+        raise HTTPException(
+            status_code=400, detail="No active session. Call /reset first."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Step failed: {e}")
 
 
 @app.get("/state")
-async def state(request: Request, response: Response, session_id: Optional[str] = Query(default=None)):
+async def state(
+    request: Request,
+    response: Response,
+    session_id: Optional[str] = Query(default=None),
+):
     try:
-        resolved_session_id = _resolve_session_id(request, explicit_session_id=session_id)
+        resolved_session_id = _resolve_session_id(
+            request, explicit_session_id=session_id
+        )
         if not resolved_session_id or not _sessions.has_session(resolved_session_id):
-            raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
+            raise HTTPException(
+                status_code=400, detail="No active session. Call /reset first."
+            )
         _set_session_cookie(response, resolved_session_id)
         return _sessions.state(resolved_session_id).model_dump()
     except HTTPException:
         raise
     except KeyError:
-        raise HTTPException(status_code=400, detail="No active session. Call /reset first.")
+        raise HTTPException(
+            status_code=400, detail="No active session. Call /reset first."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"State failed: {e}")
 
@@ -195,16 +212,16 @@ def _web_enabled() -> bool:
 
 
 def _setup_gradio_ui():
-    """Setup Gradio UI."""
-    global app, gr
+    """Setup Gradio UI mounted at /__gradio_ui__ so it only loads in iframe."""
+    global gr
 
-    # Try standalone Gradio UI first
+    import gradio as gr
+
     try:
-        import gradio as gr
         from server.gradio_standalone import create_dealroom_gradio_app
 
         _gradio_app = create_dealroom_gradio_app(_sessions)
-        app = gr.mount_gradio_app(app, _gradio_app, path="/ui")
+        gr.mount_gradio_app(app, _gradio_app, path="/__gradio_ui__")
         return True
     except ImportError as e:
         print(f"Standalone Gradio not available: {e}")
@@ -254,10 +271,10 @@ def _setup_gradio_ui():
             tab_names=["Playground", "Custom"],
             title=get_gradio_display_title(_metadata),
         )
-        app = gr.mount_gradio_app(
+        gr.mount_gradio_app(
             app,
             _web_blocks,
-            path="/ui",
+            path="/__gradio_ui__",
             theme=OPENENV_GRADIO_THEME,
             css=OPENENV_GRADIO_CSS,
         )
@@ -278,6 +295,19 @@ if _web_enabled():
                 "<p>Gradio is not installed. Run: pip install gradio</p>",
                 status_code=503,
             )
+    else:
+
+        @app.get("/ui")
+        @app.get("/ui/")
+        async def ui_blocked():
+            """Block direct access to /ui - only accessible through /web"""
+            return RedirectResponse(url="/web", status_code=302)
+
+        @app.get("/__gradio_ui__")
+        @app.get("/__gradio_ui__/")
+        async def internal_ui_blocked():
+            """Block direct access to internal Gradio path"""
+            return RedirectResponse(url="/web", status_code=302)
 
 
 if __name__ == "__main__":

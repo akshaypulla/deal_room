@@ -1,0 +1,110 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f1e4]:
+    - generic [ref=f1e21]:
+      - main [ref=f1e22]:
+        - generic [ref=f1e32]:
+          - generic [ref=f1e39]:
+            - 'heading "OpenEnv Agentic Environment: DealRoom" [level=1] [ref=f1e40]'
+            - generic [ref=f1e41]: Classic Playground for the multi-stakeholder enterprise negotiation simulator.
+          - generic [ref=f1e42]:
+            - generic [ref=f1e43]:
+              - generic [ref=f1e44]:
+                - button [ref=f1e45] [cursor=pointer]: Playground
+                - button [ref=f1e46] [cursor=pointer]: Custom
+              - tablist [ref=f1e47]:
+                - tab "Playground" [ref=f1e48] [cursor=pointer]
+                - tab "Custom" [selected] [ref=f1e49] [cursor=pointer]
+            - tabpanel [ref=f1e259]:
+              - generic [ref=f1e260]:
+                - generic [ref=f1e266]:
+                  - heading "🎯 DealRoom Lab" [level=1] [ref=f1e267]
+                  - paragraph [ref=f1e268]: Negotiate with stakeholders • Close the deal
+                - generic [ref=f1e269]:
+                  - generic [ref=f1e270]:
+                    - generic [ref=f1e286]:
+                      - button "Clear" [ref=f1e288] [cursor=pointer]:
+                        - img [ref=f1e290]
+                      - generic [ref=f1e294]: Error
+                    - generic [ref=f1e273] [cursor=pointer]:
+                      - text: 🔓 Simple
+                      - generic [ref=f1e274]: Start here
+                  - generic [ref=f1e275]:
+                    - generic [ref=f1e295]:
+                      - button "Clear" [ref=f1e297] [cursor=pointer]:
+                        - img [ref=f1e299]
+                      - generic [ref=f1e303]: Error
+                    - generic [ref=f1e278]:
+                      - text: ⚪ Medium
+                      - generic [ref=f1e279]: Available after Simple
+                  - generic [ref=f1e280]:
+                    - generic [ref=f1e304]:
+                      - button "Clear" [ref=f1e306] [cursor=pointer]:
+                        - img [ref=f1e308]
+                      - generic [ref=f1e312]: Error
+                    - generic [ref=f1e283]:
+                      - text: ⚪ Hard
+                      - generic [ref=f1e284]: Available after Medium
+                - button "▶ Start Simple Round" [active] [ref=f1e285] [cursor=pointer]
+      - contentinfo "Gradio footer navigation" [ref=f1e23]:
+        - button "Use via API logo" [ref=f1e24] [cursor=pointer]:
+          - text: Use via API
+          - img "logo" [ref=f1e25]
+        - generic [ref=f1e26]: ·
+        - link "Built with Gradio logo" [ref=f1e27] [cursor=pointer]:
+          - /url: https://gradio.app
+          - text: Built with Gradio
+          - img "logo" [ref=f1e28]
+        - generic [ref=f1e29]: ·
+        - button "Settings Settings" [ref=f1e30] [cursor=pointer]:
+          - text: Settings
+          - img "Settings" [ref=f1e31]
+    - status [ref=f1e315]:
+      - button "Error Close" [ref=f1e316] [cursor=pointer]:
+        - img [ref=f1e318]
+        - generic [ref=f1e320]:
+          - generic [ref=f1e321]: Error
+          - img [ref=f1e323]
+        - button "Close" [ref=f1e325]:
+          - generic [ref=f1e326]: ×
+      - generic [ref=f1e329]:
+        - text: "A function (handle_start_round) didn't return enough output values (needed: 13, returned: 10). Output components: [state, state, html, html, html, textbox, button, html, html, html, html, html, html] Output values returned: [{'task': 'aligned', 'seed': 42, 'level': 'simple', 'source': 'custom', 'session_id': '860ed3747ee84fc0', 'selected_stakeholder': 'finance', 'current_observation': {'reward': None, 'metadata': {}, 'round_number': 0, 'max_rounds': 8, 'stakeholders': {'finance': {'display_name': 'Jon (Finance Lead)', 'role': 'finance', 'mandatory': True, 'authority': 0.92}, 'executive_sponsor': {'display_name': 'Sofia (Executive Sponsor)', 'role': 'executive_sponsor', 'mandatory': False, 'authority': 0.95}}, 'stakeholder_messages': {'finance': 'I need clarity on business impact and spend discipline before this can move.', 'executive_sponsor': 'I care about political safety, momentum, and whether this can survive internal scrutiny.'}, 'engagement_level': {'finance': 0.501, 'executive_sponsor': 0.472}, 'weak_signals': {'finance': ['Finance keeps circling back to timing and board optics.']}, 'known_constraints': [], 'requested_artifacts': {'finance': ['roi_model', 'reference_case'], 'executive_sponsor': ['roi_model', 'implementation_timeline']}, 'approval_path_progress': {'finance': {'band': 'neutral', 'mandatory': True, 'authority': 0.92}, 'executive_sponsor': {'band': 'neutral', 'mandatory': False, 'authority': 0.95}}, 'deal_momentum': 'stalling', 'deal_stage': 'evaluation', 'competitor_events': [], 'veto_precursors': {}, 'scenario_hint': None, 'active_blockers': [], 'days_to_deadline': 45, 'done': False, 'info': {}}, 'current_state': {'episode_id': '860ed3747ee84fc0', 'step_count': 0, 'task_id': 'aligned', 'round_number': 0, 'max_rounds': 8, 'stakeholders': {'finance': {'id': 'finance', 'name': 'Jon', 'display_name': 'Jon (Finance Lead)', 'role': 'finance', 'authority': 0.92, 'mandatory': True, 'veto_power': True, 'style': 'analytical'}, 'executive_sponsor': {'id': 'executive_sponsor', 'name': 'Sofia', 'display_name': 'Sofia (Executive Sponsor)', 'role': 'executive_sponsor', 'authority': 0.95, 'mandatory': False, 'veto_power': True, 'style': 'political'}}, 'stakeholder_private': {'finance': {'role': 'finance', 'trust': 0.664, 'approval': 0.493, 'perceived_fit': 0.646, 'private_resistance': 0.364, 'utility_weights': {'cost': 0.34, 'risk': 0.22, 'timeline': 0.1, 'compliance': 0.12, 'control': 0.22}, 'mandatory': True, 'veto_power': True, 'authority': 0.92, 'style': 'analytical', 'requested_artifacts': ['roi_model', 'reference_case'], 'permanent_marks': [], 'discovered_constraints': [], 'band_history': []}, 'executive_sponsor': {'role': 'executive_sponsor', 'trust': 0.674, 'approval': 0.498, 'perceived_fit': 0.568, 'private_resistance': 0.306, 'utility_weights': {'cost': 0.18, 'risk': 0.22, 'timeline': 0.22, 'compliance': 0.1, 'control': 0.28}, 'mandatory': False, 'veto_power': True, 'authority': 0.95, 'style': 'political', 'requested_artifacts': ['roi_model', 'implementation_timeline'], 'permanent_marks': [], 'discovered_constraints': [], 'band_history': []}}, 'hidden_constraints': {'budget_ceiling': {'slot': 'price', 'label': 'Budget Ceiling', 'required_artifact': 'roi_model', 'hint': 'Board scrutiny on payback has intensified.', 'weak_signal': 'Finance keeps circling back to timing and board optics.', 'checker': {'max_price': 185000}, 'id': 'budget_ceiling', 'status': 'hinted', 'revealed_by': []}}, 'relationship_edges': [], 'commitment_ledger': [], 'deferred_effects': [], 'offer_state': {'price': None, 'timeline_weeks': None, 'security_commitments': None, 'support_level': None, 'liability_cap': None, 'days_to_deadline': 45, 'event_round': None, 'event_triggered': False}, 'feasibility_state': {'is_feasible': False, 'violations': ['unresolved_constraints']}, 'active_blockers': [], 'deal_stage': 'evaluation', 'stage_regressions': 0, 'rounds_since_last_contact': {'finance': 0, 'executive_sponsor': 0}, 'approval_caps': {'finance': 1.0, 'executive_sponsor': 1.0}, 'semantic_threshold_jitter': {'price': 0.0256, 'timeline_weeks': 0.0086, 'security_posture': 0.0194, 'liability': -0.0034, 'support_level': -0.0164, 'implementation_commitment': 0.0033}, 'weak_signal_history': {'finance': [], 'executive_sponsor': []}, 'requested_artifacts': {'finance': ['roi_model', 'reference_case'], 'executive_sponsor': ['roi_model', 'implementation_timeline']}, 'discovered_constraints': [], 'milestone_flags': {}, 'external_events': [], 'validation_failures': 0, 'malformed_actions': 0, 'last_action_error': None, 'deal_closed': False, 'deal_failed': False, 'failure_reason': '', 'final_terms': None}, 'trace': [], 'status_message': 'Click Start Simple Round to begin.', 'popup_queue': [{'stakeholder_id': 'finance'}, {'stakeholder_id': 'executive_sponsor'}], 'popup_index': 0, 'unlocked_levels': ['simple'], 'round_started': True, 'show_hint': True, 'hint_text': 'Click a stakeholder to see their response', 'selected_chip': None, 'message_text': '', 'auto_playing': False, 'auto_paused': False, 'auto_speed': 'medium', 'last_score': 0.0, 'score_delta': None, 'show_advanced': False, 'round_complete': False}, [], \""
+        - generic [ref=f1e330]:
+          - generic [ref=f1e331] [cursor=pointer]:
+            - generic [ref=f1e332]: 💰
+            - generic [ref=f1e333]: Jon (Fin
+          - generic [ref=f1e334] [cursor=pointer]:
+            - generic [ref=f1e335]: 🎯
+            - generic [ref=f1e336]: Sofia (E
+          - generic [ref=f1e337]:
+            - strong [ref=f1e338]: DEAL
+            - generic [ref=f1e339]: Simple
+        - text: "\", \""
+        - generic [ref=f1e340]:
+          - generic [ref=f1e341]:
+            - generic [ref=f1e342]: 💰
+            - generic [ref=f1e343]:
+              - generic [ref=f1e344]: Jon (Finance Lead)
+              - generic [ref=f1e345]: finance
+          - generic [ref=f1e346]: "\"I need clarity on business impact and spend discipline before this can move.\""
+          - generic [ref=f1e349]: "Status: Uncertain"
+          - generic [ref=f1e350]:
+            - strong [ref=f1e351]: "Needs:"
+            - paragraph [ref=f1e352]: roi model, reference case
+        - text: "\", \""
+        - button "💡 Provide ROI justification" [ref=f1e353] [cursor=pointer]
+        - button "Address budget concern" [ref=f1e354] [cursor=pointer]
+        - button "Ask for cost breakdown" [ref=f1e355] [cursor=pointer]
+        - button "Propose payment terms" [ref=f1e356] [cursor=pointer]
+        - text: "\", {'value': '', '__type__': 'update'}, {'interactive': True, '__type__': 'update'}, \""
+        - generic [ref=f1e357]:
+          - generic [ref=f1e358]: "0.00"
+          - generic [ref=f1e359]: Current Score
+        - text: "\", \""
+        - generic [ref=f1e360]:
+          - generic [ref=f1e361]: 📋 roi model
+          - generic [ref=f1e362]: 📋 reference case
+          - generic [ref=f1e363]: 📋 roi model
+          - generic [ref=f1e364]: 📋 implementation timeline
+        - text: "\", \""
+        - button "▼ Why this score?" [ref=f1e366] [cursor=pointer]
+        - text: "\"]"

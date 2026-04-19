@@ -1,0 +1,78 @@
+- iframe [active] [ref=e2]:
+  - generic [ref=f2e21]:
+    - main [ref=f2e22]:
+      - generic [ref=f2e23]:
+        - generic [ref=f2e30]:
+          - 'heading "OpenEnv Agentic Environment: DealRoom" [level=1] [ref=f2e31]'
+          - generic [ref=f2e32]: Classic Playground for the multi-stakeholder enterprise negotiation simulator.
+        - generic [ref=f2e33]:
+          - generic [ref=f2e34]:
+            - generic [ref=f2e35]:
+              - button [ref=f2e36] [cursor=pointer]: Playground
+              - button [ref=f2e37] [cursor=pointer]: Custom
+            - tablist [ref=f2e38]:
+              - tab "Playground" [ref=f2e39] [cursor=pointer]
+              - tab "Custom" [active] [selected] [ref=f2e40] [cursor=pointer]
+          - tabpanel [ref=f2e259]:
+            - generic [ref=f2e260]:
+              - generic [ref=f2e266]:
+                - heading "🎯 DealRoom Lab" [level=1] [ref=f2e267]
+                - paragraph [ref=f2e268]: Negotiate with stakeholders • Close the deal
+              - generic [ref=f2e269]:
+                - button "🔓 Simple Start here" [ref=f2e270] [cursor=pointer]
+                - button "⚪ Medium Available after Simple" [ref=f2e271] [cursor=pointer]
+                - button "⚪ Hard Available after Medium" [ref=f2e272] [cursor=pointer]
+              - button "▶ Start Simple Round" [ref=f2e273] [cursor=pointer]
+              - generic [ref=f2e274]:
+                - generic [ref=f2e275]:
+                  - generic [ref=f2e280]:
+                    - strong [ref=f2e281]: DEAL
+                    - generic [ref=f2e282]: Simple
+                  - generic [ref=f2e289]: 👉 Click a stakeholder to see their response
+                  - generic [ref=f2e290]:
+                    - heading "💬 Your Response" [level=3] [ref=f2e294]
+                    - generic [ref=f2e297]:
+                      - button "Address concern" [ref=f2e298] [cursor=pointer]
+                      - button "Ask for details" [ref=f2e299] [cursor=pointer]
+                      - button "Provide evidence" [ref=f2e300] [cursor=pointer]
+                      - button "Delay decision" [ref=f2e301] [cursor=pointer]
+                    - generic [ref=f2e304]:
+                      - generic [ref=f2e305]: Textbox
+                      - textbox "Textbox" [ref=f2e307]:
+                        - /placeholder: Type your message or select a suggestion above...
+                    - button "Send Response" [ref=f2e308] [cursor=pointer]
+                    - generic [ref=f2e312]: ▶ Run Round to see stakeholder responses
+                    - generic [ref=f2e313]:
+                      - button "▶ Run Round" [ref=f2e314] [cursor=pointer]
+                      - button "⏭ Step" [ref=f2e315] [cursor=pointer]
+                    - generic [ref=f2e319] [cursor=pointer]: ⚙️ Advanced Controls ▼
+                    - generic [ref=f2e320]:
+                      - generic [ref=f2e323]:
+                        - generic [ref=f2e324]: Auto-play Speed
+                        - generic [ref=f2e327]:
+                          - listbox "Auto-play Speed" [ref=f2e328]: medium
+                          - generic:
+                            - img
+                      - generic [ref=f2e329]:
+                        - button "▶ Auto-play" [ref=f2e330] [cursor=pointer]
+                        - button "⏸ Pause" [ref=f2e331] [cursor=pointer]
+                        - button "⏹ Stop" [ref=f2e332] [cursor=pointer]
+                - generic [ref=f2e333]:
+                  - generic [ref=f2e337]:
+                    - generic [ref=f2e338]: "0.00"
+                    - generic [ref=f2e339]: Current Score
+                  - generic [ref=f2e343]: No signals yet
+                  - button "▼ Why this score?" [ref=f2e348] [cursor=pointer]
+    - contentinfo "Gradio footer navigation" [ref=f2e250]:
+      - button "Use via API logo" [ref=f2e251] [cursor=pointer]:
+        - text: Use via API
+        - img "logo" [ref=f2e252]
+      - generic [ref=f2e253]: ·
+      - link "Built with Gradio logo" [ref=f2e254] [cursor=pointer]:
+        - /url: https://gradio.app
+        - text: Built with Gradio
+        - img "logo" [ref=f2e255]
+      - generic [ref=f2e256]: ·
+      - button "Settings Settings" [ref=f2e257] [cursor=pointer]:
+        - text: Settings
+        - img "Settings" [ref=f2e258]

@@ -1,0 +1,112 @@
+- generic [ref=e21]:
+  - main [ref=e22]:
+    - generic [ref=e32]:
+      - generic [ref=e39]:
+        - 'heading "OpenEnv Agentic Environment: DealRoom" [level=1] [ref=e40]'
+        - generic [ref=e41]: Classic Playground for the multi-stakeholder enterprise negotiation simulator.
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]:
+            - button [ref=e45] [cursor=pointer]: Playground
+            - button [ref=e46] [cursor=pointer]: Custom
+          - tablist [ref=e47]:
+            - tab "Playground" [ref=e48] [cursor=pointer]
+            - tab "Custom" [selected] [ref=e49] [cursor=pointer]
+        - tabpanel [ref=e259]:
+          - generic [ref=e260]:
+            - generic [ref=e266]:
+              - heading "🎯 DealRoom Lab" [level=1] [ref=e267]
+              - paragraph [ref=e268]: Negotiate with stakeholders • Close the deal
+            - generic [ref=e269]:
+              - button "🔓 Simple Start here" [ref=e270] [cursor=pointer]
+              - button "⚪ Medium Available after Simple" [ref=e271] [cursor=pointer]
+              - button "⚪ Hard Available after Medium" [ref=e272] [cursor=pointer]
+            - generic [ref=e276]:
+              - heading "🎮 How It Works" [level=3] [ref=e277]
+              - list [ref=e278]:
+                - listitem [ref=e279]:
+                  - strong [ref=e280]: Click "Start Simple Round"
+                  - text: to begin the negotiation
+                - listitem [ref=e281]:
+                  - strong [ref=e282]: Click a stakeholder seat
+                  - text: to see their concerns and what they need
+                - listitem [ref=e283]:
+                  - strong [ref=e284]: Send responses
+                  - text: to address their concerns or select a suggestion chip
+                - listitem [ref=e285]:
+                  - strong [ref=e286]: Run Round
+                  - text: to see how stakeholders respond to your actions
+                - listitem [ref=e287]:
+                  - strong [ref=e288]: "Goal:"
+                  - text: Get all stakeholders to "Aligned" (green) to close the deal
+              - generic [ref=e289]:
+                - heading "📊 Score Components" [level=4] [ref=e290]
+                - generic [ref=e291]:
+                  - generic [ref=e292]: Approval Completeness
+                  - generic [ref=e293]: 35%
+                - generic [ref=e294]:
+                  - generic [ref=e295]: Constraint Satisfaction
+                  - generic [ref=e296]: 25%
+                - generic [ref=e297]:
+                  - generic [ref=e298]: Term Feasibility
+                  - generic [ref=e299]: 15%
+                - generic [ref=e300]:
+                  - generic [ref=e301]: Relationship Durability
+                  - generic [ref=e302]: 15%
+                - generic [ref=e303]:
+                  - generic [ref=e304]: Efficiency
+                  - generic [ref=e305]: 10%
+            - button "▶ Start Simple Round" [ref=e306] [cursor=pointer]
+            - generic [ref=e307]:
+              - generic [ref=e308]:
+                - generic [ref=e313]:
+                  - strong [ref=e314]: DEAL
+                  - generic [ref=e315]: Simple
+                - generic [ref=e321]: 👉 Click a stakeholder to see their response
+                - generic [ref=e322]:
+                  - heading "💬 Your Response" [level=3] [ref=e326]
+                  - generic [ref=e329]:
+                    - button "Address concern" [ref=e330] [cursor=pointer]
+                    - button "Ask for details" [ref=e331] [cursor=pointer]
+                    - button "Provide evidence" [ref=e332] [cursor=pointer]
+                    - button "Delay decision" [ref=e333] [cursor=pointer]
+                  - generic [ref=e336]:
+                    - generic [ref=e337]: Textbox
+                    - textbox "Textbox" [ref=e339]:
+                      - /placeholder: Type your message or select a suggestion above...
+                  - button "Send Response" [ref=e340] [cursor=pointer]
+                  - generic [ref=e344]: ▶ Run Round to see stakeholder responses
+                  - generic [ref=e345]:
+                    - button "▶ Run Round" [ref=e346] [cursor=pointer]
+                    - button "⏭ Step" [ref=e347] [cursor=pointer]
+                  - generic [ref=e351] [cursor=pointer]: ⚙️ Advanced Controls ▼
+                  - generic [ref=e352]:
+                    - generic [ref=e355]:
+                      - generic [ref=e356]: Auto-play Speed
+                      - generic [ref=e359]:
+                        - listbox "Auto-play Speed" [ref=e360]: medium
+                        - generic:
+                          - img
+                    - generic [ref=e361]:
+                      - button "▶ Auto-play" [ref=e362] [cursor=pointer]
+                      - button "⏸ Pause" [ref=e363] [cursor=pointer]
+                      - button "⏹ Stop" [ref=e364] [cursor=pointer]
+              - generic [ref=e365]:
+                - generic [ref=e369]:
+                  - generic [ref=e370]: "0.00"
+                  - generic [ref=e371]: Current Score
+                - generic [ref=e375]: No signals yet
+                - button "▼ Why this score?" [ref=e380] [cursor=pointer]
+  - contentinfo "Gradio footer navigation" [ref=e23]:
+    - button "Use via API logo" [ref=e24] [cursor=pointer]:
+      - text: Use via API
+      - img "logo" [ref=e25]
+    - generic [ref=e26]: ·
+    - link "Built with Gradio logo" [ref=e27] [cursor=pointer]:
+      - /url: https://gradio.app
+      - text: Built with Gradio
+      - img "logo" [ref=e28]
+    - generic [ref=e29]: ·
+    - button "Settings Settings" [ref=e30] [cursor=pointer]:
+      - text: Settings
+      - img "Settings" [ref=e31]

@@ -1,0 +1,97 @@
+- generic [ref=e5]:
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e14]:
+        - 'heading "OpenEnv Agentic Environment: DealRoom" [level=1] [ref=e15]'
+        - generic [ref=e16]: Classic Playground for the multi-stakeholder enterprise negotiation simulator.
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e19]:
+            - button [ref=e20] [cursor=pointer]: Playground
+            - button [ref=e21] [cursor=pointer]: Custom
+          - tablist [ref=e22]:
+            - tab "Playground" [ref=e23] [cursor=pointer]
+            - tab "Custom" [selected] [ref=e24] [cursor=pointer]
+        - tabpanel [ref=e243]:
+          - generic [ref=e244]:
+            - generic [ref=e250]:
+              - heading "🎯 DealRoom Lab" [level=1] [ref=e251]
+              - paragraph [ref=e252]: Negotiate with stakeholders • Close the deal
+            - generic [ref=e253]:
+              - button "🔓 Simple Start here" [ref=e254] [cursor=pointer]
+              - button "⚪ Medium Available after Simple" [ref=e255] [cursor=pointer]
+              - button "⚪ Hard Available after Medium" [ref=e256] [cursor=pointer]
+            - button "▶ Start Simple Round" [ref=e290] [cursor=pointer]
+            - generic [ref=e291]:
+              - generic [ref=e292]:
+                - generic [ref=e296]:
+                  - generic [ref=e297] [cursor=pointer]:
+                    - generic [ref=e385]: 💰
+                    - generic [ref=e386]: Jon (Fin
+                  - generic [ref=e387] [cursor=pointer]:
+                    - generic [ref=e388]: 🎯
+                    - generic [ref=e389]: Sofia (E
+                  - generic [ref=e390]:
+                    - strong [ref=e391]: DEAL
+                    - generic [ref=e392]: Simple
+                - generic [ref=e393]:
+                  - generic [ref=e394]:
+                    - generic [ref=e395]: 💰
+                    - generic [ref=e396]:
+                      - generic [ref=e397]: Jon (Finance Lead)
+                      - generic [ref=e398]: finance
+                  - generic [ref=e399]: "\"I can see the outline, but I still need more confidence on spend and downside protection.\""
+                  - generic [ref=e402]: "Status: Aligned"
+                  - generic [ref=e403]:
+                    - strong [ref=e404]: "Needs:"
+                    - paragraph [ref=e405]: Nothing specific
+                - generic [ref=e305]: 👉 Click a stakeholder to see their response
+                - generic [ref=e306]:
+                  - heading "💬 Your Response" [level=3] [ref=e310]
+                  - generic [ref=e313]:
+                    - button "Provide ROI justification" [ref=e406] [cursor=pointer]
+                    - button "Address budget concern" [ref=e407] [cursor=pointer]
+                    - button "Ask for cost breakdown" [ref=e408] [cursor=pointer]
+                    - button "Propose payment terms" [ref=e409] [cursor=pointer]
+                  - generic [ref=e320]:
+                    - generic [ref=e321]: Textbox
+                    - textbox "Textbox" [ref=e323]:
+                      - /placeholder: Type your message or select a suggestion above...
+                  - button "Send Response" [active] [ref=e324] [cursor=pointer]
+                  - generic [ref=e328]: ▶ Run Round to see stakeholder responses
+                  - generic [ref=e329]:
+                    - button "▶ Run Round" [ref=e330] [cursor=pointer]
+                    - button "⏭ Step" [ref=e331] [cursor=pointer]
+                  - generic [ref=e335] [cursor=pointer]: ⚙️ Advanced Controls ▼
+                  - generic [ref=e336]:
+                    - generic [ref=e339]:
+                      - generic [ref=e340]: Auto-play Speed
+                      - generic [ref=e343]:
+                        - listbox "Auto-play Speed" [ref=e344]: medium
+                        - generic:
+                          - img
+                    - generic [ref=e345]:
+                      - button "▶ Auto-play" [ref=e346] [cursor=pointer]
+                      - button "⏸ Pause" [ref=e347] [cursor=pointer]
+                      - button "⏹ Stop" [ref=e348] [cursor=pointer]
+              - generic [ref=e349]:
+                - generic [ref=e353]:
+                  - generic [ref=e354]: "0.15"
+                  - generic [ref=e355]: Current Score
+                - generic [ref=e359]:
+                  - generic [ref=e410]: 📋 roi model
+                  - generic [ref=e411]: 📋 implementation timeline
+                - button "▼ Why this score?" [ref=e364] [cursor=pointer]
+  - contentinfo "Gradio footer navigation" [ref=e234]:
+    - button "Use via API logo" [ref=e235] [cursor=pointer]:
+      - text: Use via API
+      - img "logo" [ref=e236]
+    - generic [ref=e237]: ·
+    - link "Built with Gradio logo" [ref=e238] [cursor=pointer]:
+      - /url: https://gradio.app
+      - text: Built with Gradio
+      - img "logo" [ref=e239]
+    - generic [ref=e240]: ·
+    - button "Settings Settings" [ref=e241] [cursor=pointer]:
+      - text: Settings
+      - img "Settings" [ref=e242]

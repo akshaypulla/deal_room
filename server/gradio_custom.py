@@ -1,4 +1,4 @@
-"""DealRoom custom Gradio tab - visual round-table conference interface."""
+"""DealRoom Custom Lab - visual guided round-table conference interface."""
 
 from __future__ import annotations
 
@@ -16,16 +16,6 @@ from server.session_pool import DealRoomSessionPool
 from server.walkthrough_data import GUIDE_DATA
 
 TASK_ORDER = ["aligned", "conflicted", "hostile_acquisition"]
-TASK_DISPLAY = {
-    "aligned": "Simple Round",
-    "conflicted": "Medium Round",
-    "hostile_acquisition": "Hard Round",
-}
-LEVEL_TO_TASK = {
-    "simple": "aligned",
-    "medium": GUIDE_DATA["task"],
-    "hard": "hostile_acquisition",
-}
 LEVEL_LABELS = {
     "simple": "Simple",
     "medium": "Medium",
@@ -39,92 +29,135 @@ ROLE_ICONS = {
     "operations": "⚙️",
     "executive_sponsor": "🎯",
 }
-STAGE_ORDER = ["evaluation", "negotiation", "legal_review", "final_approval", "closed"]
 
 CUSTOM_CSS = """
-.dealroom-custom {
+.dealroom-lab {
     background: #0d1117;
-    border-radius: 16px;
-    padding: 20px;
+    border-radius: 12px;
+    padding: 16px;
     font-family: "IBM Plex Sans", system-ui, sans-serif;
-    min-height: 700px;
+    min-height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
 }
-.dealroom-custom * {
+.dealroom-lab * {
     color: #e5e7eb;
 }
-.dealroom-custom h1, .dealroom-custom h2, .dealroom-custom h3 {
+.dealroom-lab h1, .dealroom-lab h2, .dealroom-lab h3 {
     color: #f3f4f6;
 }
-.split-container {
+.lab-title {
+    text-align: center;
+    padding: 8px 0 12px;
+    margin-bottom: 0;
+}
+.lab-title h1 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #f3f4f6;
+}
+.lab-title p {
+    margin: 4px 0 0;
+    color: #9ca3af;
+    font-size: 0.8rem;
+}
+.step-indicator {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    background: #10161d;
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+.step-btn {
+    flex: 1;
+    text-align: center;
+    padding: 8px 10px !important;
+    border-radius: 8px !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    border: 2px solid transparent !important;
+    opacity: 0.5;
+    background: #1f2937 !important;
+    color: #6b7280 !important;
+}
+.step-btn.active {
+    opacity: 1;
+    background: rgba(255, 106, 0, 0.1) !important;
+    border-color: #FF6A00 !important;
+    color: #FF6A00 !important;
+}
+.step-btn.unlocked {
+    opacity: 0.8;
+    background: #1f2937 !important;
+    border-color: #4b5563 !important;
+    color: #d1d5db !important;
+}
+.step-hint {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 400;
+    margin-top: 2px;
+    opacity: 0.7;
+}
+.start-btn {
+    display: block;
+    width: 100%;
+    padding: 12px 20px !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    background: linear-gradient(135deg, #FF6A00 0%, #e55a00 100%) !important;
+    border: none !important;
+    border-radius: 10px !important;
+    color: #fff !important;
+    box-shadow: 0 4px 20px rgba(255, 106, 0, 0.3);
+}
+.start-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(255, 106, 0, 0.4);
+}
+.main-layout {
     display: grid;
-    grid-template-columns: 1fr 280px;
-    gap: 20px;
-    min-height: 550px;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+    min-height: 500px;
+    height: auto;
 }
 .left-panel {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
 }
 .right-panel {
-    background: #10161d;
-    border: 1px solid #1f2937;
-    border-radius: 12px;
-    padding: 16px;
-    height: fit-content;
-}
-.progress-strip {
     display: flex;
-    gap: 8px;
-    padding: 12px 16px;
-    background: #10161d;
-    border-radius: 10px;
-    margin-bottom: 8px;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
 }
-.progress-step {
-    flex: 1;
-    text-align: center;
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    background: #1f2937;
-    color: #9ca3af;
-    border: 1px solid #374151;
-}
-.progress-step.active {
-    background: rgba(34, 197, 94, 0.15);
-    border-color: #22c55e;
-    color: #22c55e;
-}
-.progress-step.locked {
-    opacity: 0.5;
-}
-.progress-step .unlock-hint {
-    display: block;
-    font-size: 0.7rem;
-    margin-top: 4px;
-    opacity: 0.7;
-}
-.round-area {
+.round-container {
     background: radial-gradient(ellipse at center, #1a1f2e 0%, #0d1117 70%);
     border-radius: 50%;
     width: 100%;
-    max-width: 420px;
-    height: 340px;
+    max-width: 340px;
+    height: 280px;
     margin: 0 auto;
     border: 2px solid #2a3142;
-    box-shadow: 0 0 60px rgba(34, 197, 94, 0.08), inset 0 0 60px rgba(0,0,0,0.5);
+    box-shadow: 0 0 40px rgba(255, 106, 0, 0.1), inset 0 0 50px rgba(0,0,0,0.4);
     position: relative;
+    flex-shrink: 0;
 }
 .round-center {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
     background: rgba(13, 17, 23, 0.9);
-    border: 2px solid #304154;
+    border: 2px solid #FF6A00;
     border-radius: 50%;
     display: flex;
     flex-direction: column;
@@ -134,372 +167,463 @@ CUSTOM_CSS = """
 }
 .round-center strong {
     font-size: 0.85rem;
-    color: #22c55e;
+    color: #FF6A00;
 }
 .round-center span {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: #9ca3af;
 }
 .seat {
     position: absolute;
-    width: 72px;
-    height: 72px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: all 0.3s ease;
     cursor: pointer;
     border: 3px solid transparent;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 .seat:hover {
-    transform: scale(1.1);
+    transform: scale(1.12);
     z-index: 10;
+    box-shadow: 0 0 20px rgba(255, 106, 0, 0.3);
 }
 .seat.selected {
-    border-color: #60a5fa;
-    box-shadow: 0 0 20px rgba(96, 165, 250, 0.4);
+    border-color: #FF6A00;
+    box-shadow: 0 0 24px rgba(255, 106, 0, 0.5);
 }
-.seat.supporter {
-    background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
-    border-color: #22c55e;
-}
-.seat.blocker {
+.seat.blocking {
     background: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%);
     border-color: #ef4444;
-    animation: pulse-blocker 2s ease-in-out infinite;
 }
 .seat.uncertain {
-    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    background: linear-gradient(135deg, #78350f 0%, #451a03 100%);
     border-color: #f59e0b;
+}
+.seat.aligned {
+    background: linear-gradient(135deg, #065f46 0%, #022c22 100%);
+    border-color: #22c55e;
 }
 .seat.dimmed {
     opacity: 0.4;
 }
 .seat-icon {
-    font-size: 1.3rem;
-    margin-bottom: 2px;
+    font-size: 1.2rem;
 }
 .seat-name {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 700;
     color: #fff;
     text-transform: uppercase;
+    margin-top: 2px;
 }
-.seat-role {
-    font-size: 0.6rem;
-    color: #9ca3af;
-}
-@keyframes pulse-blocker {
-    0%, 100% { box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3); }
-    50% { box-shadow: 0 4px 30px rgba(239, 68, 68, 0.6); }
-}
-.anchored-popup {
-    position: absolute;
-    width: 260px;
+.popup-card {
     background: #0f141b;
     border: 1px solid #304154;
-    border-radius: 12px;
-    padding: 14px;
+    border-radius: 10px;
+    padding: 12px;
+    position: relative;
+    width: 100%;
     z-index: 20;
-    animation: popup-appear 0.3s ease-out;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    animation: popup-in 0.3s ease-out;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    margin-top: 10px;
 }
-@keyframes popup-appear {
+@keyframes popup-in {
     from { opacity: 0; transform: translate(-50%, -40%); }
     to { opacity: 1; transform: translate(-50%, -50%); }
 }
 .popup-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
     border-bottom: 1px solid #1f2937;
 }
 .popup-icon {
-    font-size: 1.3rem;
+    font-size: 1.2rem;
 }
 .popup-name {
     font-weight: 700;
     color: #f3f4f6;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 .popup-role {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: #9ca3af;
 }
 .popup-quote {
     background: #0a1016;
-    border-left: 3px solid #3b82f6;
-    padding: 10px 12px;
+    border-left: 3px solid #FF6A00;
+    padding: 8px 10px;
     border-radius: 0 6px 6px 0;
     margin: 8px 0;
     color: #e5e7eb;
     font-style: italic;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
 }
 .popup-status {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin: 6px 0;
+    font-size: 0.8rem;
 }
 .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
 }
-.status-dot.green { background: #22c55e; }
-.status-dot.amber { background: #f59e0b; }
 .status-dot.red { background: #ef4444; }
+.status-dot.amber { background: #f59e0b; }
+.status-dot.green { background: #22c55e; }
 .popup-request {
-    background: rgba(34, 197, 94, 0.08);
-    border: 1px solid rgba(34, 197, 94, 0.2);
+    background: rgba(255, 106, 0, 0.08);
+    border: 1px solid rgba(255, 106, 0, 0.2);
     border-radius: 6px;
-    padding: 8px 10px;
-    margin-top: 8px;
-}
-.popup-request strong {
-    color: #22c55e;
+    padding: 6px 8px;
+    margin-top: 6px;
     font-size: 0.75rem;
 }
+.popup-request strong {
+    color: #FF6A00;
+}
 .popup-request p {
-    color: #9ca3af;
-    font-size: 0.8rem;
+    color: #d1d5db;
     margin: 2px 0 0;
+    font-size: 0.75rem;
+}
+.chips-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin: 8px 0;
+}
+.chip-btn {
+    padding: 8px 10px !important;
+    border-radius: 6px !important;
+    border: 1px solid #374151 !important;
+    background: #1f2937 !important;
+    color: #e5e7eb !important;
+    font-size: 0.75rem !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+.chip-btn:hover {
+    border-color: #FF6A00 !important;
+    background: rgba(255, 106, 0, 0.1) !important;
+}
+.chip-btn.selected {
+    border-color: #FF6A00 !important;
+    background: rgba(255, 106, 0, 0.2) !important;
+    color: #FF6A00 !important;
+}
+.chip-btn.suggested {
+    border-color: #FF6A00 !important;
+    background: rgba(255, 106, 0, 0.15) !important;
 }
 .action-bar {
     background: #10161d;
     border: 1px solid #1f2937;
-    border-radius: 12px;
-    padding: 14px;
+    border-radius: 10px;
+    padding: 12px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 .action-bar h3 {
-    margin: 0 0 10px;
-    font-size: 0.95rem;
-}
-.chat-input-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-.quick-message {
-    flex: 1;
-    background: #0d1117 !important;
-    border: 1px solid #2b3746 !important;
-    border-radius: 8px !important;
-    color: #e5e7eb !important;
-    padding: 10px 12px !important;
-}
-.send-btn {
-    background: #1f8b4c !important;
-    border: none !important;
-    border-radius: 8px !important;
-    color: #fff !important;
-    font-weight: 600 !important;
-}
-.run-btn {
-    background: linear-gradient(135deg, #1f8b4c 0%, #166534 100%) !important;
-    border: none !important;
-    border-radius: 8px !important;
-    color: #fff !important;
-    font-weight: 600 !important;
-    padding: 12px 20px !important;
-}
-.auto-btn {
-    background: #1f2937 !important;
-    border: 1px solid #374151 !important;
-    border-radius: 8px !important;
-    color: #e5e7eb !important;
-}
-.score-panel {
-    background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%);
-    border: 2px solid #22c55e;
-    border-radius: 14px;
-    padding: 16px;
-    text-align: center;
-    margin-bottom: 14px;
-}
-.score-value {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #22c55e;
-    text-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
-    line-height: 1;
-}
-.score-label {
-    font-size: 0.8rem;
-    color: #9ca3af;
-    margin-top: 4px;
-}
-.score-delta {
-    font-size: 1rem;
-    color: #22c55e;
-    margin-top: 6px;
-}
-.signals-list {
-    margin-top: 12px;
-}
-.signal-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 6px 0;
-    border-bottom: 1px solid #1f2937;
-    font-size: 0.8rem;
-}
-.signal-icon {
+    margin: 0 0 8px;
     font-size: 0.85rem;
 }
-.signal-text {
-    color: #d1d5db;
+.message-input {
+    width: 100%;
+    background: #0d1117 !important;
+    border: 1px solid #2b3746 !important;
+    border-radius: 6px !important;
+    color: #e5e7eb !important;
+    padding: 8px 10px !important;
+    font-size: 0.8rem !important;
+    margin-bottom: 8px;
 }
-.why-collapsible {
-    margin-top: 12px;
-    border-top: 1px solid #1f2937;
-    padding-top: 10px;
+.send-btn {
+    width: 100%;
+    padding: 10px !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    background: linear-gradient(135deg, #FF6A00 0%, #e55a00 100%) !important;
+    border: none !important;
+    border-radius: 6px !important;
+    color: #fff !important;
 }
-.why-toggle {
-    background: none;
-    border: none;
-    color: #9ca3af;
-    font-size: 0.8rem;
-    cursor: pointer;
+.send-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 106, 0, 0.3);
+}
+.sim-controls {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+.run-btn {
+    flex: 1;
+    padding: 10px !important;
+    font-weight: 600 !important;
+    background: linear-gradient(135deg, #FF6A00 0%, #e55a00 100%) !important;
+    border: none !important;
+    border-radius: 6px !important;
+    color: #fff !important;
+}
+.step-btn-sm {
+    padding: 10px 14px !important;
+    background: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    border-radius: 6px !important;
+    color: #e5e7eb !important;
+}
+.advanced-toggle {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 0;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 6px;
+    color: #9ca3af;
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-top: 8px;
 }
-.why-toggle:hover {
+.advanced-toggle:hover {
     color: #e5e7eb;
 }
-.why-content {
+.advanced-controls {
     display: none;
     margin-top: 8px;
     padding: 8px;
     background: #0d1117;
     border-radius: 6px;
+}
+.advanced-controls.open {
+    display: block;
+}
+.speed-select {
+    width: 100%;
+    padding: 6px !important;
+    background: #1f2937 !important;
+    border: 1px solid #374151 !important;
+    border-radius: 6px !important;
+    color: #e5e7eb !important;
+    margin-bottom: 6px;
+}
+.auto-btns {
+    display: flex;
+    gap: 6px;
+}
+.auto-btn {
+    flex: 1;
+    padding: 8px !important;
+    border-radius: 6px !important;
+    font-weight: 600 !important;
+}
+.pause-btn {
+    background: #f59e0b !important;
+    border: none !important;
+    color: #0d1117 !important;
+}
+.stop-btn {
+    background: #374151 !important;
+    border: none !important;
+    color: #e5e7eb !important;
+}
+.score-panel {
+    background: #10161d;
+    border: 1px solid #1f2937;
+    border-radius: 10px;
+    padding: 12px;
+}
+.score-display {
+    text-align: center;
+    padding: 12px;
+    background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%);
+    border: 2px solid #FF6A00;
+    border-radius: 12px;
+    margin-bottom: 10px;
+}
+.score-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #FF6A00;
+    text-shadow: 0 0 20px rgba(255, 106, 0, 0.5);
+    line-height: 1;
+}
+.score-label {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+.score-delta {
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+.signals-section {
+    margin-bottom: 10px;
+}
+.signals-section h4 {
+    font-size: 0.7rem;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 6px;
+}
+.signals-area {
     font-size: 0.8rem;
     color: #d1d5db;
+    padding: 6px 0;
+    border-bottom: 1px solid #1f2937;
+}
+.signal-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    background: rgba(255, 106, 0, 0.1);
+    color: #FF6A00;
+    margin: 2px 2px 2px 0;
+}
+.why-panel {
+    border-top: 1px solid #1f2937;
+    padding-top: 8px;
+}
+.why-header {
+    color: #9ca3af;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.why-content {
+    margin-top: 6px;
+    padding: 8px;
+    background: #0d1117;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: #d1d5db;
+    line-height: 1.5;
 }
 .why-content.open {
     display: block;
+}
+.why-score-breakdown {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #1f2937;
+}
+.why-score-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.why-score-label {
+    color: #9ca3af;
+}
+.why-score-value {
+    color: #FF6A00;
+    font-weight: 600;
+}
+.why-score-weight {
+    color: #6b7280;
+    font-size: 0.7rem;
+}
+.hint-box {
+    background: rgba(255, 106, 0, 0.1);
+    border: 1px solid rgba(255, 106, 0, 0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 8px 0;
+    font-size: 0.8rem;
+    color: #FF6A00;
+    text-align: center;
+}
+.hint-box::before {
+    content: "👉 ";
+}
+.auto-status {
+    text-align: center;
+    padding: 6px;
+    background: rgba(255, 106, 0, 0.1);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: #FF6A00;
+    margin-bottom: 6px;
 }
 .blocker-tag {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 3px 8px;
+    padding: 3px 6px;
     border-radius: 999px;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
-    margin: 3px 3px 3px 0;
+    margin: 2px 2px 2px 0;
 }
-.request-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-    margin: 3px 3px 3px 0;
-}
-.insights-section {
+.how-it-works {
+    background: linear-gradient(135deg, rgba(255, 106, 0, 0.08) 0%, rgba(255, 106, 0, 0.03) 100%);
+    border: 1px solid rgba(255, 106, 0, 0.2);
+    border-radius: 10px;
+    padding: 14px;
     margin-bottom: 12px;
 }
-.insights-section h4 {
+.how-it-works h3 {
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+    color: #FF6A00;
+}
+.how-it-works ol {
+    margin: 0;
+    padding-left: 18px;
     font-size: 0.8rem;
+    color: #d1d5db;
+    line-height: 1.6;
+}
+.how-it-works li {
+    margin-bottom: 4px;
+}
+.scoring-info {
+    background: #0d1117;
+    border-radius: 6px;
+    padding: 8px;
+    margin-top: 10px;
+}
+.scoring-info h4 {
+    margin: 0 0 6px;
+    font-size: 0.75rem;
+    color: #FF6A00;
+}
+.scoring-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    margin-bottom: 3px;
+}
+.scoring-item-name {
     color: #9ca3af;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin: 0 0 8px;
 }
-.step-accordion {
-    border: 1px solid #1f2937;
-    border-radius: 8px;
-    margin-bottom: 6px;
-    overflow: hidden;
-}
-.step-accordion-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-    background: #10161d;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-.step-accordion-header:hover {
-    background: #1a2332;
-}
-.step-accordion-header.active {
-    background: rgba(34, 197, 94, 0.08);
-    border-left: 3px solid #22c55e;
-}
-.step-accordion-header.locked {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-.step-number {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: #1f2937;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 0.8rem;
-}
-.step-number.active {
-    background: #22c55e;
-    color: #0d1117;
-}
-.step-number.locked {
-    background: #374151;
+.scoring-item-weight {
     color: #6b7280;
 }
-.step-info {
-    flex: 1;
+.hidden {
+    display: none !important;
 }
-.step-title {
-    font-weight: 600;
-    color: #f3f4f6;
-    font-size: 0.9rem;
-}
-.step-desc {
-    font-size: 0.75rem;
-    color: #9ca3af;
-    margin-top: 2px;
-}
-.step-lock-icon {
-    font-size: 0.9rem;
-}
-.divider-line {
-    height: 1px;
-    background: #1f2937;
-    margin: 12px 0;
-}
-.gr-input input, .gr-input textarea, .gr-input select {
-    background: #0d1117 !important;
-    border: 1px solid #2b3746 !important;
-    color: #e5e7eb !important;
-    border-radius: 6px !important;
-}
-.gr-input label {
-    color: #9ca3af !important;
-    font-size: 0.8rem !important;
-}
-""".strip()
+"""
 
 
 class DealRoomWebManager:
@@ -539,6 +663,14 @@ def load_metadata() -> EnvironmentMetadata:
     )
 
 
+SEAT_POSITIONS = [
+    {"top": "8%", "left": "50%", "transform": "translateX(-50%)"},
+    {"top": "32%", "left": "6%"},
+    {"top": "32%", "right": "6%"},
+    {"bottom": "8%", "left": "50%", "transform": "translateX(-50%)"},
+]
+
+
 def build_custom_tab(
     web_manager: DealRoomWebManager,
     action_fields: List[Dict[str, Any]],
@@ -549,34 +681,33 @@ def build_custom_tab(
 ) -> gr.Blocks:
     del action_fields, metadata, is_chat_env, title, quick_start_md
 
-    SEAT_POSITIONS = [
-        {"top": "10%", "left": "50%", "transform": "translateX(-50%)"},
-        {"top": "35%", "left": "8%"},
-        {"top": "35%", "right": "8%"},
-        {"bottom": "10%", "left": "50%", "transform": "translateX(-50%)"},
-    ]
-
     def default_view_state() -> Dict[str, Any]:
         return {
             "task": "aligned",
             "seed": 42,
             "level": "simple",
             "source": "custom",
-            "guide_step": 0,
             "session_id": None,
             "selected_stakeholder": None,
             "current_observation": None,
             "current_state": None,
             "trace": [],
-            "status_message": "Click Open Simple to start the negotiation.",
+            "status_message": "Click Start Simple Round to begin.",
             "popup_queue": [],
             "popup_index": 0,
-            "auto_advance": False,
-            "auto_delay": 5,
             "unlocked_levels": ["simple"],
-            "show_suggestions": False,
+            "round_started": False,
+            "show_hint": False,
+            "hint_text": "",
+            "selected_chip": None,
+            "message_text": "",
+            "auto_playing": False,
+            "auto_paused": False,
+            "auto_speed": "medium",
             "last_score": 0.0,
             "score_delta": None,
+            "show_advanced": False,
+            "round_complete": False,
         }
 
     def _escape(value: Any) -> str:
@@ -617,91 +748,79 @@ def build_custom_tab(
 
     def _approval_band(observation: Dict[str, Any], stakeholder_id: str) -> str:
         progress = observation.get("approval_path_progress", {}).get(stakeholder_id, {})
-        return str(progress.get("band", "neutral"))
+        band = str(progress.get("band", "neutral"))
+        if band in ("supporter", "workable"):
+            return "aligned"
+        elif band == "blocker":
+            return "blocking"
+        return "uncertain"
 
-    def _run_reset(
-        task: str,
-        seed: int,
-        level: str,
-        source: str,
-        view_state: Optional[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        current = _normalize_view_state(view_state)
-        session_id, obs, state = web_manager.reset_session(
-            task_id=task,
-            seed=int(seed),
-            session_id=current.get("session_id"),
-        )
-        observation = obs.model_dump()
-        updated = dict(current)
-        updated.update(
-            {
-                "task": task,
-                "seed": int(seed),
-                "level": level,
-                "source": source,
-                "guide_step": 0,
-                "session_id": session_id,
-                "current_observation": observation,
-                "current_state": state.model_dump(),
-                "selected_stakeholder": _first_stakeholder_id(observation),
-                "popup_queue": [],
-                "popup_index": 0,
-                "trace": [
-                    {
-                        "kind": "reset",
-                        "task": task,
-                        "seed": int(seed),
-                        "level": level,
-                        "stage": obs.deal_stage,
-                        "blockers": list(obs.active_blockers),
-                    }
-                ],
-                "status_message": f"Round ready. Click Run to simulate.",
-                "last_score": 0.0,
-                "score_delta": None,
-            }
-        )
-        return updated
-
-    def _record_step(
-        view_state: Dict[str, Any],
-        action: DealRoomAction,
-        obs: DealRoomObservation,
-        reward: float,
-        done: bool,
-        info: Dict[str, Any],
-        state: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        updated = _normalize_view_state(view_state)
-        trace = list(updated.get("trace", []))
-        old_score = updated.get("last_score", 0.0)
-        trace.append(
-            {
-                "kind": "step",
-                "step": len([item for item in trace if item.get("kind") == "step"]) + 1,
-                "action": action.model_dump(),
-                "reward": reward,
-                "done": done,
-                "stage": obs.deal_stage,
-                "blockers": list(obs.active_blockers),
-                "dense_reward_breakdown": info.get("dense_reward_breakdown", {}),
-                "relationship_effects": info.get("relationship_effects", []),
-            }
-        )
-        updated["trace"] = trace
-        updated["current_observation"] = obs.model_dump()
-        updated["current_state"] = state
-        updated["score_delta"] = reward - old_score if old_score else None
-        updated["last_score"] = reward
-        _keep_valid_selected(updated)
-        updated["popup_queue"] = []
-        updated["popup_index"] = 0
-        updated["status_message"] = (
-            f"Step {trace[-1]['step']} | Reward: {reward:.2f} | "
-            f"{'Done!' if done else 'Continue...'}"
-        )
-        return updated
+    def _generate_chips(view_state: Dict[str, Any]) -> List[str]:
+        view_state = _normalize_view_state(view_state)
+        observation = view_state.get("current_observation") or {}
+        selected = view_state.get("selected_stakeholder")
+        if not selected or not observation:
+            return [
+                "Address concern",
+                "Ask for details",
+                "Provide evidence",
+                "Delay decision",
+            ]
+        payload = observation.get("stakeholders", {}).get(selected, {})
+        role = payload.get("role", "")
+        band = _approval_band(observation, selected)
+        requested = observation.get("requested_artifacts", {}).get(selected, [])
+        chips = []
+        if role == "finance" or "budget" in str(requested) or "roi" in str(requested):
+            chips = [
+                "Provide ROI justification",
+                "Address budget concern",
+                "Ask for cost breakdown",
+                "Propose payment terms",
+            ]
+        elif role == "legal_compliance":
+            chips = [
+                "Clarify contract terms",
+                "Address compliance gap",
+                "Provide legal documentation",
+                "Suggest alternative clauses",
+            ]
+        elif role == "procurement":
+            chips = [
+                "Justify vendor selection",
+                "Compare alternatives",
+                "Address delivery concerns",
+                "Request timeline flexibility",
+            ]
+        elif role == "executive_sponsor":
+            chips = [
+                "Summarize business case",
+                "Highlight key benefits",
+                "Address risk concerns",
+                "Propose next steps",
+            ]
+        elif band == "blocking":
+            chips = [
+                "Address their concern",
+                "Request clarification",
+                "Provide supporting evidence",
+                "Escalate to manager",
+            ]
+        elif band == "uncertain":
+            chips = [
+                "Clarify your position",
+                "Provide more details",
+                "Address specific worries",
+                "Build confidence",
+            ]
+        else:
+            chips = [
+                "Acknowledge their point",
+                "Build on alignment",
+                "Move discussion forward",
+                "Confirm understanding",
+            ]
+        return chips[:4]
 
     def _policy_action(observation: Dict[str, Any]) -> DealRoomAction:
         obs = _coerce_observation(observation)
@@ -726,55 +845,97 @@ def build_custom_tab(
                 message="Help me understand the real concern we need to address.",
             )
         return DealRoomAction(
-            action_type="group_proposal",
+            action_type="direct_message",
             target="all",
             target_ids=list(obs.stakeholders.keys()),
-            message="I believe we have enough aligned evidence to move to final approval.",
-            proposed_terms={
-                "price": 180000,
-                "timeline_weeks": 14,
-                "support_level": "named_support_lead",
-                "liability_cap": "mutual_cap",
-            },
+            message="Let me know if there's anything else you need before we proceed.",
         )
 
-    def _run_action(
-        payload: Dict[str, Any],
-        source: str,
+    def _run_reset(
+        task: str,
+        seed: int,
+        level: str,
+        view_state: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        current = _normalize_view_state(view_state)
+        session_id, obs, state = web_manager.reset_session(
+            task_id=task,
+            seed=int(seed),
+            session_id=current.get("session_id"),
+        )
+        observation = obs.model_dump()
+        stakeholders = list(observation.get("stakeholders", {}).keys())
+        updated = dict(current)
+        updated.update(
+            {
+                "task": task,
+                "seed": int(seed),
+                "level": level,
+                "source": "custom",
+                "session_id": session_id,
+                "current_observation": observation,
+                "current_state": state.model_dump(),
+                "selected_stakeholder": stakeholders[0] if stakeholders else None,
+                "popup_queue": [{"stakeholder_id": s} for s in stakeholders],
+                "popup_index": 0,
+                "round_started": True,
+                "show_hint": True,
+                "hint_text": "Click a stakeholder to see their response",
+                "trace": [],
+                "last_score": 0.0,
+                "score_delta": None,
+                "round_complete": False,
+                "selected_chip": None,
+                "message_text": "",
+            }
+        )
+        return updated
+
+    def _record_step(
         view_state: Dict[str, Any],
-        saved_runs: List[Dict[str, Any]],
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        if not view_state.get("current_observation") or not view_state.get(
-            "session_id"
-        ):
-            view_state = _run_reset(
-                view_state["task"],
-                int(view_state["seed"]),
-                view_state["level"],
-                source,
-                view_state,
-            )
-        action = DealRoomAction.model_validate(payload)
-        obs, reward, done, info, state = web_manager.step_session(
-            view_state["session_id"], action
+        action: DealRoomAction,
+        obs: DealRoomObservation,
+        reward: float,
+        done: bool,
+        info: Dict[str, Any],
+        state: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        updated = _normalize_view_state(view_state)
+        trace = list(updated.get("trace", []))
+        old_score = updated.get("last_score", 0.0)
+        step_num = len([item for item in trace if item.get("kind") == "step"]) + 1
+        trace.append(
+            {
+                "kind": "step",
+                "step": step_num,
+                "action": action.model_dump(),
+                "reward": reward,
+                "done": done,
+                "stage": obs.deal_stage,
+                "blockers": list(obs.active_blockers),
+            }
         )
-        updated = _record_step(
-            view_state, action, obs, reward, done, info, state.model_dump()
-        )
-        updated["source"] = source
-        saved_runs = _save_run_if_complete(updated, saved_runs)
-        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+        updated["trace"] = trace
+        updated["current_observation"] = obs.model_dump()
+        updated["current_state"] = state
+        updated["score_delta"] = reward - old_score if old_score else None
+        updated["last_score"] = reward
+        updated["round_complete"] = done
+        if done:
+            updated["status_message"] = f"Round complete! Final score: {reward:.2f}"
+            updated["show_hint"] = False
+        else:
+            updated["status_message"] = f"Step {step_num} | Reward: {reward:.2f}"
+        return updated
 
     def _save_run_if_complete(
         view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         view_state = _normalize_view_state(view_state)
         saved_runs = _normalize_saved_runs(saved_runs)
         observation = view_state.get("current_observation") or {}
         if not observation.get("done"):
-            return saved_runs
+            return saved_runs, view_state
         score = CCIGrader.compute(
             DealRoomState.model_validate(view_state.get("current_state") or {})
         )
@@ -790,18 +951,27 @@ def build_custom_tab(
                 "score": score,
             }
         )
-        return saved_runs[-8:]
+        saved_runs = saved_runs[-8:]
 
-    def _target_choices(view_state: Dict[str, Any]) -> List[str]:
-        observation = _normalize_view_state(view_state).get("current_observation") or {}
-        return ["all"] + list(observation.get("stakeholders", {}).keys())
+        level_order = ["simple", "medium", "hard"]
+        current_index = (
+            level_order.index(view_state["level"])
+            if view_state["level"] in level_order
+            else 0
+        )
+        if current_index < len(level_order) - 1:
+            next_level = level_order[current_index + 1]
+            if next_level not in view_state.get("unlocked_levels", []):
+                view_state["unlocked_levels"] = view_state.get(
+                    "unlocked_levels", []
+                ) + [next_level]
+
+        return saved_runs, view_state
 
     def _build_round_table(view_state: Dict[str, Any]) -> str:
         view_state = _normalize_view_state(view_state)
         observation = view_state.get("current_observation") or {}
         selected = view_state.get("selected_stakeholder")
-        popup_queue = view_state.get("popup_queue", [])
-        current_idx = view_state.get("popup_index", 0)
         seats_html = []
         stakeholder_list = list(observation.get("stakeholders", {}).items())
         for index, (stakeholder_id, payload) in enumerate(stakeholder_list):
@@ -811,19 +981,8 @@ def build_custom_tab(
             pos = SEAT_POSITIONS[index]
             pos_style = "; ".join(f"{k}: {v}" for k, v in pos.items())
             is_selected = stakeholder_id == selected
-            is_speaking = (
-                len(popup_queue) > 0
-                and current_idx < len(popup_queue)
-                and popup_queue[current_idx].get("stakeholder_id") == stakeholder_id
-            )
-            seat_class = "seat"
-            if band == "supporter" or band == "workable":
-                seat_class += " supporter"
-            elif band == "blocker":
-                seat_class += " blocker"
-            elif band == "uncertain":
-                seat_class += " uncertain"
-            if is_selected or is_speaking:
+            seat_class = f"seat {band}"
+            if is_selected:
                 seat_class += " selected"
             elif selected and stakeholder_id != selected:
                 seat_class += " dimmed"
@@ -831,18 +990,15 @@ def build_custom_tab(
                 f"<div class='{seat_class}' style='{pos_style}' data-stakeholder='{_escape(stakeholder_id)}'>"
                 f"<div class='seat-icon'>{ROLE_ICONS.get(payload.get('role', ''), '👤')}</div>"
                 f"<div class='seat-name'>{_escape(payload.get('display_name', stakeholder_id)[:8])}</div>"
-                f"<div class='seat-role'>{_escape(payload.get('role', '')[:10])}</div>"
                 f"</div>"
             )
-        level_text = {"simple": "Basic", "medium": "Medium", "hard": "Hard"}.get(
-            view_state["level"], "Basic"
-        )
+        level_text = LEVEL_LABELS.get(view_state["level"], "Simple")
         return (
-            "<div class='round-area'>"
+            "<div class='round-container'>"
             + "".join(seats_html)
             + (
                 "<div class='round-center'>"
-                f"<strong>DEAL</strong>"
+                "<strong>DEAL</strong>"
                 f"<span>{level_text}</span>"
                 "</div>"
             )
@@ -855,40 +1011,35 @@ def build_custom_tab(
         popup_queue = view_state.get("popup_queue", [])
         current_idx = view_state.get("popup_index", 0)
         if not popup_queue or current_idx >= len(popup_queue):
-            if not observation:
-                return "<div class='anchored-popup' style='display:none;'></div>"
-            selected = view_state.get("selected_stakeholder")
-            if not selected or selected not in observation.get("stakeholders", {}):
-                return "<div class='anchored-popup' style='display:none;'></div>"
-            stakeholder_id = selected
-            payload = observation["stakeholders"][stakeholder_id]
-        else:
-            stakeholder_id = popup_queue[current_idx].get("stakeholder_id")
-            payload = observation.get("stakeholders", {}).get(stakeholder_id, {})
+            return "<div class='popup-card hidden'></div>"
+        stakeholder_id = popup_queue[current_idx].get("stakeholder_id")
+        if not stakeholder_id or stakeholder_id not in observation.get(
+            "stakeholders", {}
+        ):
+            return "<div class='popup-card hidden'></div>"
+        payload = observation["stakeholders"][stakeholder_id]
         message = observation.get("stakeholder_messages", {}).get(
             stakeholder_id, "No message yet."
         )
         requested = observation.get("requested_artifacts", {}).get(stakeholder_id, [])
-        progress = observation.get("approval_path_progress", {}).get(stakeholder_id, {})
-        band = progress.get("band", "neutral")
+        band = _approval_band(observation, stakeholder_id)
         status_class = (
-            "green"
-            if band in ("supporter", "workable")
-            else ("red" if band == "blocker" else "amber")
+            "red"
+            if band == "blocking"
+            else ("amber" if band == "uncertain" else "green")
         )
-        status_text = {
-            "supporter": "Aligned",
-            "workable": "Aligned",
-            "blocker": "Blocking",
-            "uncertain": "Uncertain",
-            "neutral": "Neutral",
-        }.get(band, "Neutral")
+        status_text = (
+            "Blocking"
+            if band == "blocking"
+            else ("Uncertain" if band == "uncertain" else "Aligned")
+        )
         request_text = (
             ", ".join(r.replace("_", " ") for r in requested)
             if requested
-            else "Nothing requested"
+            else "Nothing specific"
         )
-        popup_content = (
+        return (
+            "<div class='popup-card'>"
             "<div class='popup-header'>"
             f"<div class='popup-icon'>{ROLE_ICONS.get(payload.get('role', ''), '👤')}</div>"
             f"<div><div class='popup-name'>{_escape(payload.get('display_name', stakeholder_id))}</div>"
@@ -897,26 +1048,36 @@ def build_custom_tab(
             f"<div class='popup-quote'>\"{_escape(message)}\"</div>"
             "<div class='popup-status'>"
             f"<div class='status-dot {status_class}'></div>"
-            f"<span style='color: #e5e7eb;'>{status_text}</span>"
+            f"<span>Status: {status_text}</span>"
             "</div>"
-            f"<div class='popup-request'>"
-            f"<strong>Needs:</strong>"
+            "<div class='popup-request'>"
+            "<strong>Needs:</strong>"
             f"<p>{_escape(request_text)}</p>"
-            f"</div>"
+            "</div>"
+            "</div>"
         )
-        return f"<div class='anchored-popup'>{popup_content}</div>"
+
+    def _build_chips(view_state: Dict[str, Any]) -> Tuple[str, str, str, str]:
+        chips = _generate_chips(view_state)
+        selected = view_state.get("selected_chip")
+        chip_values = []
+        for i in range(4):
+            if i < len(chips):
+                chip_values.append(chips[i])
+            else:
+                chip_values.append("")
+        return tuple(chip_values)  # type: ignore
 
     def _build_score_panel(view_state: Dict[str, Any]) -> str:
         view_state = _normalize_view_state(view_state)
         observation = view_state.get("current_observation") or {}
-        state = view_state.get("current_state") or {}
         current_score = view_state.get("last_score", 0.0)
         score_delta = view_state.get("score_delta")
         done = observation.get("done", False)
         if done:
-            final_score = CCIGrader.compute(DealRoomState.model_validate(state))
+            final_score = current_score
             return (
-                "<div class='score-panel'>"
+                "<div class='score-display'>"
                 f"<div class='score-value'>{final_score:.2f}</div>"
                 "<div class='score-label'>Final Score</div>"
                 "</div>"
@@ -924,17 +1085,17 @@ def build_custom_tab(
         delta_html = ""
         if score_delta is not None:
             sign = "+" if score_delta >= 0 else ""
-            delta_color = "#22c55e" if score_delta >= 0 else "#ef4444"
-            delta_html = f"<div class='score-delta' style='color: {delta_color};'>{sign}{score_delta:.2f}</div>"
+            color = "#FF6A00" if score_delta >= 0 else "#ef4444"
+            delta_html = f"<div class='score-delta' style='color: {color};'>{sign}{score_delta:.2f}</div>"
         blockers = observation.get("active_blockers", [])
         blocker_html = ""
         if blockers:
-            blocker_tags = "".join(
+            tags = "".join(
                 f"<span class='blocker-tag'>⚠️ {_escape(b)}</span>" for b in blockers
             )
-            blocker_html = f"<div style='margin-top:10px;'>{blocker_tags}</div>"
+            blocker_html = f"<div style='margin-top:8px;'>{tags}</div>"
         return (
-            "<div class='score-panel'>"
+            "<div class='score-display'>"
             f"<div class='score-value'>{current_score:.2f}</div>"
             "<div class='score-label'>Current Score</div>"
             f"{delta_html}"
@@ -946,7 +1107,7 @@ def build_custom_tab(
         view_state = _normalize_view_state(view_state)
         observation = view_state.get("current_observation") or {}
         if not observation:
-            return "<div class='signals-list'><div class='signal-item'><span class='signal-icon'>📊</span><span class='signal-text'>No signals yet</span></div></div>"
+            return "<div class='signals-area'>No signals yet</div>"
         signals = []
         for stakeholder_id, artifacts in observation.get(
             "requested_artifacts", {}
@@ -954,37 +1115,171 @@ def build_custom_tab(
             if artifacts:
                 for art in artifacts:
                     signals.append(
-                        f"<span class='request-tag'>📋 {_escape(art.replace('_', ' '))}</span>"
+                        f"<span class='signal-tag'>📋 {_escape(art.replace('_', ' '))}</span>"
                     )
         if not signals:
-            return "<div class='signals-list'><div class='signal-item'><span class='signal-icon'>📊</span><span class='signal-text'>No pending requests</span></div></div>"
-        return f"<div class='signals-list'>{''.join(signals)}</div>"
+            return "<div class='signals-area'>No pending requests</div>"
+        return f"<div class='signals-area'>{''.join(signals)}</div>"
+
+    def _compute_score_breakdown(view_state: Dict[str, Any]) -> Dict[str, float]:
+        state = view_state.get("current_state") or {}
+        mandatory_ids = [
+            sid
+            for sid, p in state.get("stakeholder_private", {}).items()
+            if p.get("mandatory")
+        ]
+        approval_score = 0.0
+        if mandatory_ids:
+            approvals = [
+                state["stakeholder_private"][sid]["approval"] for sid in mandatory_ids
+            ]
+            approval_score = min(1.0, sum(approvals) / len(approvals))
+        constraints = list(state.get("hidden_constraints", {}).values())
+        constraint_score = 0.0
+        if constraints:
+            resolved = sum(1 for c in constraints if c.get("resolved"))
+            constraint_score = resolved / len(constraints)
+        violations = state.get("feasibility_state", {}).get("violations", [])
+        penalty = min(0.20, 0.05 * len(violations))
+        feasibility_score = max(0.0, 1.0 - penalty)
+        trusts = [p["trust"] for p in state.get("stakeholder_private", {}).values()]
+        mark_penalty = sum(
+            0.03 * len(p.get("permanent_marks", []))
+            for p in state.get("stakeholder_private", {}).values()
+        )
+        average_trust = sum(trusts) / len(trusts) if trusts else 0.0
+        relationship_score = max(0.0, min(1.0, average_trust - mark_penalty))
+        max_rounds = state.get("max_rounds", 20)
+        round_num = state.get("round_number", 0)
+        efficiency_score = (
+            max(0.1, 1.0 - ((round_num / max_rounds) ** 1.25) * 0.45)
+            if max_rounds > 0
+            else 0.0
+        )
+        return {
+            "approval_completeness": approval_score,
+            "constraint_satisfaction": constraint_score,
+            "term_feasibility": feasibility_score,
+            "relationship_durability": relationship_score,
+            "efficiency": efficiency_score,
+        }
 
     def _build_why(view_state: Dict[str, Any]) -> str:
         view_state = _normalize_view_state(view_state)
         observation = view_state.get("current_observation") or {}
+        state = view_state.get("current_state") or {}
         blockers = observation.get("active_blockers", [])
-        if not blockers:
-            return (
-                "<div class='why-collapsible'>"
-                "<button class='why-toggle' onclick='this.nextElementSibling.classList.toggle(\"open\")'>"
-                "▼ Why this score?"
-                "</button>"
-                "<div class='why-content'>"
-                "<p>No active blockers. The negotiation is progressing well.</p>"
-                "</div>"
-                "</div>"
+        if not observation:
+            content = (
+                "<strong>Your goal:</strong> Get all stakeholders to approve the deal.<br><br>"
+                "<strong>How to score higher:</strong><br>"
+                "• Satisfy stakeholder requests (artifacts)<br>"
+                "• Resolve hidden constraints<br>"
+                "• Keep negotiations efficient<br>"
+                "• Maintain stakeholder trust"
             )
-        reasons = [f"• {_escape(b)} is blocking progress" for b in blockers]
-        content = "<p>" + "<br>".join(reasons) + "</p>"
+        elif blockers:
+            reasons = [f"• {_escape(b)} is blocking progress" for b in blockers]
+            content = "<br>".join(reasons)
+        else:
+            content = "No active blockers. The negotiation is progressing well."
+        breakdown = _compute_score_breakdown(view_state)
+        weights = CCIGrader.WEIGHTS
+        breakdown_html = ""
+        for key, weight in weights.items():
+            label = key.replace("_", " ").title()
+            value = breakdown.get(key, 0.0)
+            pct = int(value * 100)
+            breakdown_html += f"""
+            <div class="why-score-item">
+                <span class="why-score-label">{label}</span>
+                <span>
+                    <span class="why-score-value">{pct}%</span>
+                    <span class="why-score-weight">({int(weight * 100)}%)</span>
+                </span>
+            </div>"""
         return (
-            "<div class='why-collapsible'>"
-            "<button class='why-toggle' onclick='this.nextElementSibling.classList.toggle(\"open\")'>"
-            "▼ Why this score?"
-            "</button>"
-            f"<div class='why-content'>{content}</div>"
+            "<div class='why-panel'>"
+            "<div class='why-header'>Why this score?</div>"
+            f"<div class='why-content open'>{content}"
+            f"<div class='why-score-breakdown'><strong>Score Breakdown:</strong>{breakdown_html}</div>"
+            "</div>"
             "</div>"
         )
+
+    def _build_how_it_works(view_state: Dict[str, Any]) -> str:
+        view_state = _normalize_view_state(view_state)
+        round_started = view_state.get("round_started", False)
+        hidden_class = "hidden" if round_started else ""
+        if round_started:
+            return f"<div class='how-it-works {hidden_class}'></div>"
+        return """
+        <div class="how-it-works">
+            <h3>🎮 How It Works</h3>
+            <ol>
+                <li><strong>Click "Start Simple Round"</strong> to begin the negotiation</li>
+                <li><strong>Click a stakeholder seat</strong> to see their concerns and what they need</li>
+                <li><strong>Send responses</strong> to address their concerns or select a suggestion chip</li>
+                <li><strong>Run Round</strong> to see how stakeholders respond to your actions</li>
+                <li><strong>Goal:</strong> Get all stakeholders to "Aligned" (green) to close the deal</li>
+            </ol>
+            <div class="scoring-info">
+                <h4>📊 Score Components</h4>
+                <div class="scoring-item"><span class="scoring-item-name">Approval Completeness</span><span class="scoring-item-weight">35%</span></div>
+                <div class="scoring-item"><span class="scoring-item-name">Constraint Satisfaction</span><span class="scoring-item-weight">25%</span></div>
+                <div class="scoring-item"><span class="scoring-item-name">Term Feasibility</span><span class="scoring-item-weight">15%</span></div>
+                <div class="scoring-item"><span class="scoring-item-name">Relationship Durability</span><span class="scoring-item-weight">15%</span></div>
+                <div class="scoring-item"><span class="scoring-item-name">Efficiency</span><span class="scoring-item-weight">10%</span></div>
+            </div>
+        </div>
+        """
+
+    def _build_hint(view_state: Dict[str, Any]) -> str:
+        view_state = _normalize_view_state(view_state)
+        round_started = view_state.get("round_started", False)
+        if not round_started:
+            return "<div class='hint-box'>👆 Click 'Start Simple Round' to begin!</div>"
+
+        observation = view_state.get("current_observation") or {}
+        stakeholders = observation.get("stakeholders", {})
+        selected = view_state.get("selected_stakeholder")
+
+        if not stakeholders:
+            return "<div class='hint-box'>⏳ Waiting for game to load...</div>"
+
+        aligned_stakeholders = []
+        uncertain_stakeholders = []
+        for sid, data in stakeholders.items():
+            status = _approval_band(observation, sid)
+            if status == "green":
+                aligned_stakeholders.append(data.get("display_name", sid))
+            else:
+                uncertain_stakeholders.append(data.get("display_name", sid))
+
+        if len(aligned_stakeholders) == len(stakeholders):
+            return "<div class='hint-box'>🎉 All stakeholders aligned! Click 'Run Round' to finalize and see your score!</div>"
+
+        if not selected or selected not in stakeholders:
+            next_uncertain = (
+                uncertain_stakeholders[0]
+                if uncertain_stakeholders
+                else list(stakeholders.values())[0].get("display_name", "a stakeholder")
+            )
+            return f"<div class='hint-box'>👆 Select '{next_uncertain}' from the dropdown to address their concerns</div>"
+
+        selected_data = stakeholders.get(selected, {})
+        selected_name = selected_data.get("display_name", selected)
+        selected_status = _approval_band(observation, selected)
+
+        if selected_status == "green":
+            remaining = len(uncertain_stakeholders)
+            if remaining > 0:
+                next_uncertain = uncertain_stakeholders[0]
+                return f"<div class='hint-box'>✅ {selected_name} is aligned! Now select '{next_uncertain}' from dropdown to continue</div>"
+            else:
+                return "<div class='hint-box'>✅ All stakeholders aligned! Click 'Run Round' to finalize</div>"
+        else:
+            return f"<div class='hint-box'>📝 {selected_name} needs attention. Use chips or type a message, then click 'Send Response'</div>"
 
     def _render_all_outputs(
         view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
@@ -992,128 +1287,43 @@ def build_custom_tab(
         view_state = _normalize_view_state(view_state)
         saved_runs = _normalize_saved_runs(saved_runs)
         _keep_valid_selected(view_state)
-        targets = _target_choices(view_state)
+        chip_0, chip_1, chip_2, chip_3 = _build_chips(view_state)
+
+        observation = view_state.get("current_observation") or {}
+        stakeholders = observation.get("stakeholders", {})
+        stakeholder_choices = [
+            f"{ROLE_ICONS.get(p.get('role', ''), '👤')} {p.get('display_name', sid)} ({sid})"
+            for sid, p in stakeholders.items()
+        ]
+        selected = view_state.get("selected_stakeholder")
+        selected_choice = None
+        if selected and selected in stakeholders:
+            p = stakeholders[selected]
+            selected_choice = f"{ROLE_ICONS.get(p.get('role', ''), '👤')} {p.get('display_name', selected)} ({selected})"
+
+        round_started = view_state.get("round_started", False)
+
         return (
+            _build_how_it_works(view_state),
             _build_round_table(view_state),
             _build_popup(view_state),
+            gr.update(
+                value=selected_choice,
+                choices=stakeholder_choices,
+                visible=round_started and bool(stakeholder_choices),
+            ),
+            _build_hint(view_state),
+            gr.update(value=chip_0, visible=bool(chip_0)),
+            gr.update(value=chip_1, visible=bool(chip_1)),
+            gr.update(value=chip_2, visible=bool(chip_2)),
+            gr.update(value=chip_3, visible=bool(chip_3)),
+            gr.update(value=view_state.get("message_text", "")),
             _build_score_panel(view_state),
             _build_signals(view_state),
             _build_why(view_state),
-            gr.update(choices=targets, value="all"),
         )
 
-    def _render_insights_panel(
-        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        return (
-            _build_score_panel(view_state),
-            _build_signals(view_state),
-            _build_why(view_state),
-        )
-
-    def handle_reset(
-        task: str,
-        seed: int,
-        level: str,
-        view_state: Dict[str, Any],
-        saved_runs: List[Dict[str, Any]],
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        updated = _run_reset(task, int(seed), level, level, view_state)
-        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
-
-    def handle_step(
-        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        if not view_state.get("current_observation") or not view_state.get(
-            "session_id"
-        ):
-            updated = _run_reset(
-                view_state["task"],
-                int(view_state["seed"]),
-                view_state["level"],
-                view_state["level"],
-                view_state,
-            )
-            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
-        action = _policy_action(view_state["current_observation"])
-        return _run_action(action.model_dump(), "auto", view_state, saved_runs)
-
-    def handle_send_message(
-        message: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        if not view_state.get("current_observation") or not view_state.get(
-            "session_id"
-        ):
-            updated = _run_reset(
-                view_state["task"],
-                int(view_state["seed"]),
-                view_state["level"],
-                view_state["level"],
-                view_state,
-            )
-            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
-        action = DealRoomAction(
-            action_type="direct_message",
-            target="all",
-            target_ids=[],
-            message=message,
-        )
-        return _run_action(action.model_dump(), "manual", view_state, saved_runs)
-
-    def handle_seat_click(
-        stakeholder_id: str,
-        view_state: Dict[str, Any],
-        saved_runs: List[Dict[str, Any]],
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        view_state["selected_stakeholder"] = stakeholder_id
-        view_state["popup_index"] = 0
-        view_state["popup_queue"] = [{"stakeholder_id": stakeholder_id}]
-        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
-
-    def handle_next_popup(
-        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        popup_queue = view_state.get("popup_queue", [])
-        current_idx = view_state.get("popup_index", 0)
-        if current_idx < len(popup_queue) - 1:
-            view_state["popup_index"] = current_idx + 1
-        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
-
-    def handle_auto_advance_toggle(
-        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        view_state["auto_advance"] = not view_state.get("auto_advance", False)
-        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
-
-    def handle_focus_seat(
-        index: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        stakeholders = list(
-            (view_state.get("current_observation") or {}).get("stakeholders", {}).keys()
-        )
-        if index < len(stakeholders):
-            stakeholder_id = stakeholders[index]
-            view_state["selected_stakeholder"] = stakeholder_id
-            view_state["popup_index"] = 0
-            view_state["popup_queue"] = [{"stakeholder_id": stakeholder_id}]
-        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
-
-    def handle_open_level(
+    def handle_start_round(
         level: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
     ) -> Tuple[Any, ...]:
         view_state = _normalize_view_state(view_state)
@@ -1125,78 +1335,321 @@ def build_custom_tab(
         }
         task = task_map.get(level, "aligned")
         seed = view_state.get("seed", 42)
-        updated = _run_reset(task, int(seed), level, level, view_state)
-        if level not in updated.get("unlocked_levels", []):
-            updated["unlocked_levels"] = updated.get("unlocked_levels", []) + [level]
+        updated = _run_reset(task, int(seed), level, view_state)
         return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
 
-    def handle_unlock_level(
+    def handle_step(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        if not view_state.get("current_observation") or not view_state.get(
+            "session_id"
+        ):
+            updated = _run_reset(
+                "aligned", int(view_state.get("seed", 42)), "simple", view_state
+            )
+            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+        action = _policy_action(view_state["current_observation"])
+        obs, reward, done, info, state = web_manager.step_session(
+            view_state["session_id"], action
+        )
+        updated = _record_step(
+            view_state, action, obs, reward, done, info, state.model_dump()
+        )
+        updated["popup_index"] = 0
+        stakeholders = list(
+            updated["current_observation"].get("stakeholders", {}).keys()
+        )
+        updated["popup_queue"] = [{"stakeholder_id": s} for s in stakeholders]
+        if updated.get("round_complete"):
+            updated["show_hint"] = False
+        else:
+            updated["show_hint"] = True
+            updated["hint_text"] = "Click a stakeholder to see their response"
+        updated["selected_chip"] = None
+        updated["message_text"] = ""
+        saved_runs, updated = _save_run_if_complete(updated, saved_runs)
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+
+    def handle_send_action(
+        message: str,
+        view_state: Dict[str, Any],
+        saved_runs: List[Dict[str, Any]],
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        if not view_state.get("current_observation") or not view_state.get(
+            "session_id"
+        ):
+            updated = _run_reset(
+                "aligned", int(view_state.get("seed", 42)), "simple", view_state
+            )
+            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+        selected = view_state.get("selected_stakeholder", "all")
+        action = DealRoomAction(
+            action_type="direct_message",
+            target=selected,
+            target_ids=[selected] if selected != "all" else [],
+            message=message or "Understood.",
+        )
+        obs, reward, done, info, state = web_manager.step_session(
+            view_state["session_id"], action
+        )
+        updated = _record_step(
+            view_state, action, obs, reward, done, info, state.model_dump()
+        )
+        stakeholders = list(
+            updated["current_observation"].get("stakeholders", {}).keys()
+        )
+        current_selected = view_state.get("selected_stakeholder")
+        if current_selected not in stakeholders:
+            current_selected = stakeholders[0] if stakeholders else None
+        updated["selected_stakeholder"] = current_selected
+        updated["popup_index"] = 0
+        updated["popup_queue"] = (
+            [{"stakeholder_id": current_selected}] if current_selected else []
+        )
+        if updated.get("round_complete"):
+            updated["show_hint"] = False
+        else:
+            updated["show_hint"] = True
+            updated["hint_text"] = "Click a stakeholder to continue"
+        updated["selected_chip"] = None
+        updated["message_text"] = ""
+        saved_runs, updated = _save_run_if_complete(updated, saved_runs)
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+
+    def handle_seat_click(
+        index_or_id: Any, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        stakeholders = list(
+            (view_state.get("current_observation") or {}).get("stakeholders", {}).keys()
+        )
+
+        stakeholder_id = None
+        if isinstance(index_or_id, int):
+            if index_or_id < len(stakeholders):
+                stakeholder_id = stakeholders[index_or_id]
+        else:
+            for sid in stakeholders:
+                if sid in str(index_or_id):
+                    stakeholder_id = sid
+                    break
+
+        if stakeholder_id:
+            view_state["selected_stakeholder"] = stakeholder_id
+            view_state["popup_index"] = 0
+            view_state["popup_queue"] = [{"stakeholder_id": stakeholder_id}]
+            view_state["show_hint"] = False
+            view_state["selected_chip"] = None
+            view_state["message_text"] = ""
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_chip_select(
+        chip_index: int, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        chips = _generate_chips(view_state)
+        if 0 <= chip_index < len(chips):
+            chip = chips[chip_index]
+            view_state["selected_chip"] = chip
+            view_state["message_text"] = chip
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_toggle_advanced(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        view_state["show_advanced"] = not view_state.get("show_advanced", False)
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_toggle_auto_play(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        view_state["auto_playing"] = not view_state.get("auto_playing", False)
+        view_state["auto_paused"] = False
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_toggle_pause(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        view_state["auto_paused"] = not view_state.get("auto_paused", False)
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_stop_auto(
+        view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        view_state["auto_playing"] = False
+        view_state["auto_paused"] = False
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_speed_change(
+        speed: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        view_state["auto_speed"] = speed
+        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+
+    def handle_level_select(
         level: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
     ) -> Tuple[Any, ...]:
         view_state = _normalize_view_state(view_state)
         saved_runs = _normalize_saved_runs(saved_runs)
         if level not in view_state.get("unlocked_levels", []):
-            view_state["unlocked_levels"] = view_state.get("unlocked_levels", []) + [
-                level
-            ]
-        return (view_state, saved_runs) + _render_all_outputs(view_state, saved_runs)
+            return (view_state, saved_runs) + _render_all_outputs(
+                view_state, saved_runs
+            )
+        return handle_start_round(level, view_state, saved_runs)
 
-    demo = gr.Blocks(elem_classes=["dealroom-custom"])
+    demo = gr.Blocks(elem_classes=["dealroom-lab"])
     with demo:
         gr.HTML(f"<style>{CUSTOM_CSS}</style>")
 
         view_state = gr.State(default_view_state())
         saved_runs = gr.State([])
 
-        with gr.Column():
+        with gr.Column(elem_classes=["lab-title"]):
             gr.HTML(
-                "<div style='text-align:center;padding:16px 0 8px;'>"
-                "<h1 style='margin:0;color:#f3f4f6;font-size:1.5rem;'>🎯 DealRoom Lab</h1>"
-                "<p style='margin:6px 0 0;color:#9ca3af;font-size:0.9rem;'>Negotiate with stakeholders • Close the deal</p>"
-                "</div>"
+                "<h1>🎯 DealRoom Lab</h1>"
+                "<p>Negotiate with stakeholders • Close the deal</p>"
             )
 
-            progress_html = gr.HTML()
+        with gr.Row(elem_classes=["step-indicator"]):
+            step_simple = gr.Button(
+                "🔓 Simple\nStart here",
+                elem_classes=["step-btn", "active"],
+                variant="secondary",
+            )
+            step_medium = gr.Button(
+                "⚪ Medium\nAvailable after Simple",
+                elem_classes=["step-btn"],
+                variant="secondary",
+            )
+            step_hard = gr.Button(
+                "⚪ Hard\nAvailable after Medium",
+                elem_classes=["step-btn"],
+                variant="secondary",
+            )
 
-            with gr.Row():
-                with gr.Column(scale=7):
-                    table_html = gr.HTML()
-                    popup_html = gr.HTML()
+        how_it_works_html = gr.HTML()
 
-                    gr.HTML("<div class='action-bar'>")
-                    gr.HTML("<h3>🎮 Actions</h3>")
+        start_btn = gr.Button(
+            "▶ Start Simple Round", elem_classes=["start-btn"], variant="primary"
+        )
 
-                    with gr.Row(elem_classes=["chat-input-row"]):
-                        message_input = gr.Textbox(
-                            placeholder="Type your message...",
-                            lines=2,
-                            elem_classes=["quick-message"],
+        with gr.Row(elem_classes=["main-layout"]):
+            with gr.Column(elem_classes=["left-panel"]):
+                table_html = gr.HTML()
+                stakeholder_select = gr.Dropdown(
+                    label="👇 Select a stakeholder to see their message:",
+                    choices=[],
+                    value=None,
+                    interactive=True,
+                    visible=False,
+                )
+                popup_html = gr.HTML()
+                hint_html = gr.HTML(value="")
+
+                with gr.Column(elem_classes=["action-bar"]):
+                    gr.HTML("<h3>💬 Your Response</h3>")
+                    with gr.Row(elem_classes=["chips-grid"]):
+                        chip_btn_0 = gr.Button(
+                            "",
+                            variant="secondary",
+                            elem_classes=["chip-btn"],
+                            visible=False,
                         )
-                        send_btn = gr.Button(
-                            "📤 Send", elem_classes=["send-btn"], variant="primary"
+                        chip_btn_1 = gr.Button(
+                            "",
+                            variant="secondary",
+                            elem_classes=["chip-btn"],
+                            visible=False,
                         )
+                        chip_btn_2 = gr.Button(
+                            "",
+                            variant="secondary",
+                            elem_classes=["chip-btn"],
+                            visible=False,
+                        )
+                        chip_btn_3 = gr.Button(
+                            "",
+                            variant="secondary",
+                            elem_classes=["chip-btn"],
+                            visible=False,
+                        )
+                    message_input = gr.Textbox(
+                        placeholder="Type your message or select a suggestion above...",
+                        lines=2,
+                        elem_classes=["message-input"],
+                    )
+                    send_btn = gr.Button(
+                        "Send Response", elem_classes=["send-btn"], variant="primary"
+                    )
 
-                    gr.HTML("<div class='divider-line'></div>")
-
-                    with gr.Row():
+                    gr.HTML(
+                        "<div style='margin-top:10px;'>▶ Run Round to see stakeholder responses</div>"
+                    )
+                    with gr.Row(elem_classes=["sim-controls"]):
                         run_btn = gr.Button(
                             "▶ Run Round", elem_classes=["run-btn"], variant="primary"
                         )
-                        step_btn = gr.Button("⏭ Step", elem_classes=["auto-btn"])
-                        auto_toggle_btn = gr.Button("⏵ Auto", elem_classes=["auto-btn"])
+                        step_btn = gr.Button(
+                            "⏭ Step", elem_classes=["step-btn-sm"], variant="secondary"
+                        )
 
-                    gr.HTML("</div>")
+                    gr.HTML(
+                        "<div class='advanced-toggle' onclick='this.nextElementSibling.classList.toggle(\"open\")'>⚙️ Advanced Controls ▼</div>"
+                    )
+                    with gr.Column(
+                        elem_classes=["advanced-controls"]
+                    ) as advanced_panel:
+                        speed_select = gr.Dropdown(
+                            ["slow", "medium", "fast"],
+                            value="medium",
+                            label="Auto-play Speed",
+                            elem_classes=["speed-select"],
+                        )
+                        with gr.Row(elem_classes=["auto-btns"]):
+                            auto_start_btn = gr.Button(
+                                "▶ Auto-play", elem_classes=["auto-btn"]
+                            )
+                            pause_btn = gr.Button(
+                                "⏸ Pause", elem_classes=["auto-btn", "pause-btn"]
+                            )
+                            stop_btn = gr.Button(
+                                "⏹ Stop", elem_classes=["auto-btn", "stop-btn"]
+                            )
 
-                with gr.Column(scale=3):
-                    score_html = gr.HTML()
-                    signals_html = gr.HTML()
-                    why_html = gr.HTML()
+            with gr.Column(elem_classes=["right-panel"]):
+                score_html = gr.HTML()
+                signals_html = gr.HTML()
+                why_html = gr.HTML()
 
         outputs = [
             view_state,
             saved_runs,
+            how_it_works_html,
             table_html,
             popup_html,
+            stakeholder_select,
+            hint_html,
+            chip_btn_0,
+            chip_btn_1,
+            chip_btn_2,
+            chip_btn_3,
+            message_input,
             score_html,
             signals_html,
             why_html,
@@ -1207,81 +1660,32 @@ def build_custom_tab(
             sr = _normalize_saved_runs(sr)
             return (vs, sr) + _render_all_outputs(vs, sr)
 
-        def render_progress(vs, sr):
-            vs = _normalize_view_state(vs)
-            sr = _normalize_saved_runs(sr)
-            unlocked = vs.get("unlocked_levels", ["simple"])
-            current = vs.get("level", "simple")
-            steps_html = ""
-            for level in ["simple", "medium", "hard"]:
-                is_active = level == current
-                is_unlocked = level in unlocked
-                cls = "active" if is_active else ("locked" if not is_unlocked else "")
-                icon = "🔓" if is_unlocked else "🔒"
-                label = LEVEL_LABELS.get(level, level)
-                hint = {
-                    "simple": "Start here",
-                    "medium": "Complete Simple",
-                    "hard": "Complete Medium",
-                }.get(level, "")
-                hint_html = (
-                    f'<span class="unlock-hint">{hint}</span>'
-                    if hint and not is_unlocked
-                    else ""
-                )
-                steps_html += (
-                    f"<div class='progress-step {cls}' data-level='{level}'>"
-                    f"{icon} {label}"
-                    f"{hint_html}"
-                    f"</div>"
-                )
-            return f"<div class='progress-strip'>{steps_html}</div>"
-
         demo.load(fn=render_initial, inputs=[view_state, saved_runs], outputs=outputs)
 
-        def on_load_update(vs, sr):
-            vs = _normalize_view_state(vs)
-            sr = _normalize_saved_runs(sr)
-            return (render_progress(vs, sr),) + tuple(_render_insights_panel(vs, sr))
-
-        demo.load(
-            fn=on_load_update,
-            inputs=[view_state, saved_runs],
-            outputs=[progress_html, score_html, signals_html, why_html],
-        )
-
-        simple_open_btn = gr.Button("Open Simple", visible=True)
-        medium_open_btn = gr.Button("Open Medium", visible=True)
-        hard_open_btn = gr.Button("Open Hard", visible=True)
-
-        def update_buttons(vs, sr):
-            vs = _normalize_view_state(vs)
-            sr = _normalize_saved_runs(sr)
-            unlocked = vs.get("unlocked_levels", ["simple"])
-            return (
-                gr.update(visible="simple" in unlocked),
-                gr.update(visible="medium" in unlocked),
-                gr.update(visible="hard" in unlocked),
-            )
-
-        demo.load(
-            fn=update_buttons,
-            inputs=[view_state, saved_runs],
-            outputs=[simple_open_btn, medium_open_btn, hard_open_btn],
-        )
-
-        simple_open_btn.click(
-            fn=handle_open_level,
+        start_btn.click(
+            fn=handle_start_round,
             inputs=[gr.State("simple"), view_state, saved_runs],
             outputs=outputs,
         )
-        medium_open_btn.click(
-            fn=handle_open_level,
+
+        stakeholder_select.change(
+            fn=handle_seat_click,
+            inputs=[stakeholder_select, view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        step_simple.click(
+            fn=handle_level_select,
+            inputs=[gr.State("simple"), view_state, saved_runs],
+            outputs=outputs,
+        )
+        step_medium.click(
+            fn=handle_level_select,
             inputs=[gr.State("medium"), view_state, saved_runs],
             outputs=outputs,
         )
-        hard_open_btn.click(
-            fn=handle_open_level,
+        step_hard.click(
+            fn=handle_level_select,
             inputs=[gr.State("hard"), view_state, saved_runs],
             outputs=outputs,
         )
@@ -1298,24 +1702,55 @@ def build_custom_tab(
             outputs=outputs,
         )
 
-        auto_toggle_btn.click(
-            fn=handle_auto_advance_toggle,
-            inputs=[view_state, saved_runs],
-            outputs=outputs,
-        )
-
         send_btn.click(
-            fn=handle_send_message,
+            fn=handle_send_action,
             inputs=[message_input, view_state, saved_runs],
             outputs=outputs,
         )
 
-        for i in range(4):
-            btn = gr.Button(f"Seat {i + 1}", visible=True)
-            btn.click(
-                fn=handle_focus_seat,
-                inputs=[gr.State(i), view_state, saved_runs],
-                outputs=outputs,
-            )
+        chip_btn_0.click(
+            fn=handle_chip_select,
+            inputs=[gr.State(0), view_state, saved_runs],
+            outputs=outputs,
+        )
+        chip_btn_1.click(
+            fn=handle_chip_select,
+            inputs=[gr.State(1), view_state, saved_runs],
+            outputs=outputs,
+        )
+        chip_btn_2.click(
+            fn=handle_chip_select,
+            inputs=[gr.State(2), view_state, saved_runs],
+            outputs=outputs,
+        )
+        chip_btn_3.click(
+            fn=handle_chip_select,
+            inputs=[gr.State(3), view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        auto_start_btn.click(
+            fn=handle_toggle_auto_play,
+            inputs=[view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        pause_btn.click(
+            fn=handle_toggle_pause,
+            inputs=[view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        stop_btn.click(
+            fn=handle_stop_auto,
+            inputs=[view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        speed_select.change(
+            fn=handle_speed_change,
+            inputs=[speed_select, view_state, saved_runs],
+            outputs=outputs,
+        )
 
     return demo
