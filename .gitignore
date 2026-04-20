@@ -54,8 +54,21 @@ Thumbs.db
 *.log
 logs/
 
-# Environment variables (keep .env.example but not .env)
-# .env
+# Editor/tooling (exclude from tracking, don't delete)
+.codex/
+.playwright-mcp/
+.kilo/
+.agents/
+
+# Environment (keep secrets out)
+.env
+.env.example
+
+# Screenshots/debug artifacts
+*.png
+custom-*.png
+learn_tab*.png
+custom-tab*.png
 
 # UV lock file (if you want to ignore it)
 # uv.lock

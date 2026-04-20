@@ -20,6 +20,7 @@ class DealRoomAction(BaseModel):
     proposed_terms: Optional[Dict[str, Any]] = None
     channel: str = "formal"
     mode: str = "async_email"
+    lookahead: Optional["LookaheadRequest"] = None
 
     @field_validator("message")
     @classmethod
@@ -60,6 +61,9 @@ class DealRoomObservation(BaseModel):
     days_to_deadline: int = 30
     done: bool = False
     info: Dict[str, Any] = Field(default_factory=dict)
+    engagement_level_delta: Optional[float] = None
+    engagement_history: List[Dict[str, float]] = Field(default_factory=list)
+    cross_stakeholder_echoes: List[Dict[str, str]] = Field(default_factory=list)
 
 
 class DealRoomReward(BaseModel):
@@ -107,7 +111,9 @@ class DealRoomState(BaseModel):
 
     @field_validator("stakeholder_private")
     @classmethod
-    def validate_tracks(cls, value: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    def validate_tracks(
+        cls, value: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
         required = {"trust", "approval", "perceived_fit", "private_resistance"}
         for stakeholder_id, payload in value.items():
             missing = required - set(payload.keys())
@@ -117,3 +123,17 @@ class DealRoomState(BaseModel):
 
     def __call__(self) -> "DealRoomState":
         return self
+
+
+class LookaheadRequest(BaseModel):
+    action_draft: "DealRoomAction"
+    n_hypotheses: int = 2
+    depth: int = 2
+
+
+class SimulationResult(BaseModel):
+    predicted_responses: Dict[str, str] = Field(default_factory=dict)
+    predicted_belief_deltas: Dict[str, float] = Field(default_factory=dict)
+    cvar_impact: Dict[str, float] = Field(default_factory=dict)
+    graph_information_gain: float = 0.0
+    cost: float = 0.07

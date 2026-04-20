@@ -2,21 +2,26 @@
 
 from __future__ import annotations
 
+import os
+import sys
 import time
 import uuid
 from dataclasses import dataclass
 from threading import Lock
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
+
+_env_path = os.environ.get("DEALROOM_ENV_PATH", "/app/env")
+if _env_path not in sys.path:
+    sys.path.insert(0, _env_path)
 
 from models import DealRoomAction, DealRoomObservation, DealRoomState
-from server.deal_room_environment import DealRoomEnvironment
 
 SESSION_COOKIE_NAME = "dealroom_session_id"
 
 
 @dataclass
 class SessionEntry:
-    env: DealRoomEnvironment
+    env: Any
     last_access: float
 
 
@@ -35,16 +40,24 @@ class DealRoomSessionPool:
         seed: Optional[int],
         session_id: Optional[str] = None,
     ) -> Tuple[str, DealRoomObservation, DealRoomState]:
+        _base = os.environ.get("DEALROOM_ENV_PATH", "/app/env")
+        if _base not in sys.path:
+            sys.path.insert(0, _base)
+
+        import deal_room.environment.dealroom_v3 as module
+
+        DealRoomV3 = module.DealRoomV3
+
         with self._lock:
             self._prune_locked()
             resolved_session_id = session_id or self._new_session_id()
             entry = self._sessions.get(resolved_session_id)
             if entry is None:
-                entry = SessionEntry(env=DealRoomEnvironment(), last_access=time.time())
+                entry = SessionEntry(env=DealRoomV3(), last_access=time.time())
                 self._sessions[resolved_session_id] = entry
-            obs = entry.env.reset(seed=seed, task_id=task_id, episode_id=resolved_session_id)
+            obs = entry.env.reset(seed=seed, task_id=task_id)
             entry.last_access = time.time()
-            state = entry.env.state
+            state = entry.env._state
             if len(self._sessions) > self.max_sessions:
                 self._prune_oldest_locked()
             return resolved_session_id, obs, state
@@ -60,7 +73,7 @@ class DealRoomSessionPool:
                 raise KeyError(session_id)
             obs, reward, done, info = entry.env.step(action)
             entry.last_access = time.time()
-            return obs, reward, done, info, entry.env.state
+            return obs, reward, done, info, entry.env._state
 
     def state(self, session_id: str) -> DealRoomState:
         with self._lock:
@@ -68,7 +81,7 @@ class DealRoomSessionPool:
             if entry is None:
                 raise KeyError(session_id)
             entry.last_access = time.time()
-            return entry.env.state
+            return entry.env._state
 
     def has_session(self, session_id: Optional[str]) -> bool:
         if not session_id:

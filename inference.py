@@ -13,6 +13,7 @@ from openai import OpenAI
 from models import DealRoomAction, DealRoomObservation
 from server.deal_room_environment import DealRoomEnvironment
 from server.grader import CCIGrader
+from deal_room.environment.llm_client import generate_stakeholder_response
 
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 BENCHMARK = "deal-room"
@@ -60,7 +61,10 @@ ROLE_PROBE_MESSAGES = {
 MESSAGE_SYSTEM_PROMPT = """You are the lead negotiator for an enterprise software vendor.
 Return only compact JSON with one key: "message".
 The message must be concise, credible, collaborative, and role-aware.
-Do not include markdown or any other keys."""
+
+IMPORTANT: You have access to a lookahead tool. When you use lookahead, it costs 0.07 from your goal reward, so use it strategically.
+The buying committee deliberates autonomously between your interactions with each stakeholder.
+You cannot observe the committee's internal deliberations, causal relationships, or individual stakeholder risk tolerances — only their observable behavioral signals."""
 
 
 def resolve_api_credentials() -> tuple[Optional[str], str]:
@@ -98,7 +102,9 @@ class ProtocolPolicy:
         requested = obs.requested_artifacts
         known_constraints = {item["id"] for item in obs.known_constraints}
         required_artifacts = {
-            item["required_artifact"] for item in obs.known_constraints if item.get("required_artifact")
+            item["required_artifact"]
+            for item in obs.known_constraints
+            if item.get("required_artifact")
         }
         blockers = obs.active_blockers
         rounds_remaining = max(0, obs.max_rounds - obs.round_number)
@@ -115,11 +121,15 @@ class ProtocolPolicy:
         optional_requested: list[tuple[str, str]] = []
         for stakeholder_id, artifacts in requested.items():
             for artifact in artifacts:
-                bucket = high_priority_requested if (
-                    stakeholder_id in mandatory_ids
-                    or stakeholder_id in blockers
-                    or artifact in required_artifacts
-                ) else optional_requested
+                bucket = (
+                    high_priority_requested
+                    if (
+                        stakeholder_id in mandatory_ids
+                        or stakeholder_id in blockers
+                        or artifact in required_artifacts
+                    )
+                    else optional_requested
+                )
                 bucket.append((stakeholder_id, artifact))
 
         if (
@@ -149,7 +159,9 @@ class ProtocolPolicy:
 
         if obs.veto_precursors:
             target_id = next(iter(obs.veto_precursors))
-            if target_id not in self.handled_precursors and not requested.get(target_id):
+            if target_id not in self.handled_precursors and not requested.get(
+                target_id
+            ):
                 self.handled_precursors.add(target_id)
                 return action_with_message(
                     DealRoomAction(
@@ -175,12 +187,13 @@ class ProtocolPolicy:
                 ),
                 obs,
                 f"Send the requested {artifact.replace('_', ' ')} to {stakeholder_id}.",
-                fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
+                fallback_message=ARTIFACT_MESSAGES.get(
+                    artifact, "Here is the requested material."
+                ),
             )
 
-        if (
-            not high_priority_requested
-            and (not known_constraints or obs.deal_stage in {"evaluation", "negotiation"})
+        if not high_priority_requested and (
+            not known_constraints or obs.deal_stage in {"evaluation", "negotiation"}
         ):
             probe = choose_artifact_probe(obs, self.sent_artifacts)
             if probe is not None:
@@ -195,10 +208,14 @@ class ProtocolPolicy:
                     ),
                     obs,
                     f"Use a discovery artifact to surface or resolve any remaining hidden feasibility constraint for {target_id}.",
-                    fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
+                    fallback_message=ARTIFACT_MESSAGES.get(
+                        artifact, "Here is the requested material."
+                    ),
                 )
 
-        if (not known_constraints or any(obs.weak_signals.values())) and obs.deal_stage in {
+        if (
+            not known_constraints or any(obs.weak_signals.values())
+        ) and obs.deal_stage in {
             "evaluation",
             "negotiation",
             "legal_review",
@@ -291,7 +308,9 @@ class ProtocolPolicy:
                 ),
                 obs,
                 f"Clear the remaining requested artifact for {stakeholder_id}.",
-                fallback_message=ARTIFACT_MESSAGES.get(artifact, "Here is the requested material."),
+                fallback_message=ARTIFACT_MESSAGES.get(
+                    artifact, "Here is the requested material."
+                ),
             )
 
         target_id = choose_probe_target(obs, mandatory_only=bool(mandatory_ids))
@@ -317,7 +336,9 @@ def choose_probe_target(obs: DealRoomObservation, mandatory_only: bool = False) 
     for stakeholder_id, payload in obs.approval_path_progress.items():
         if mandatory_only and not payload.get("mandatory"):
             continue
-        rank = {"blocker": 0, "neutral": 1, "workable": 2, "supporter": 3}[payload["band"]]
+        rank = {"blocker": 0, "neutral": 1, "workable": 2, "supporter": 3}[
+            payload["band"]
+        ]
         score = rank - (0.2 if payload.get("mandatory") else 0.0)
         if score < weakest_score:
             weakest_score = score
@@ -330,7 +351,8 @@ def choose_artifact_probe(
     sent_artifacts: set[tuple[str, str]],
 ) -> Optional[tuple[str, str]]:
     role_to_id = {
-        payload["role"]: stakeholder_id for stakeholder_id, payload in obs.stakeholders.items()
+        payload["role"]: stakeholder_id
+        for stakeholder_id, payload in obs.stakeholders.items()
     }
     fallback_target = choose_probe_target(obs)
 
@@ -352,7 +374,9 @@ def action_with_message(
     instruction: str,
     fallback_message: Optional[str] = None,
 ) -> DealRoomAction:
-    message = fallback_message or "I want to make this easy to evaluate and safe to approve."
+    message = (
+        fallback_message or "I want to make this easy to evaluate and safe to approve."
+    )
     if should_use_llm_messages():
         llm_message = maybe_generate_message(obs, action, instruction)
         if llm_message:
@@ -366,46 +390,26 @@ def maybe_generate_message(
     action: DealRoomAction,
     instruction: str,
 ) -> Optional[str]:
-    client = get_client()
-    if client is None:
+    prompt = (
+        f"Generate a vendor message for an enterprise B2B negotiation.\n"
+        f"Instruction: {instruction}\n"
+        f"Stage: {obs.deal_stage}\n"
+        f"Action type: {action.action_type}\n"
+        f"Targets: {action.target_ids}\n"
+        f"Weak signals: {obs.weak_signals}\n"
+        f"Return JSON: {{'message': 'your message here'}}\n"
+        f"Message must be concise (2-4 sentences), credible, collaborative, role-aware."
+    )
+    context = f"vendor_message round {getattr(obs, 'round_number', '?')}"
+    result = generate_stakeholder_response(prompt=prompt, context=context)
+    if result is None:
         return None
-
     try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            temperature=0.0,
-            max_tokens=180,
-            messages=[
-                {"role": "system", "content": MESSAGE_SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "instruction": instruction,
-                            "stage": obs.deal_stage,
-                            "weak_signals": obs.weak_signals,
-                            "known_constraints": obs.known_constraints,
-                            "requested_artifacts": obs.requested_artifacts,
-                            "action": action.model_dump(),
-                        }
-                    ),
-                },
-            ],
-        )
-    except Exception:
-        return None
-
-    raw = (response.choices[0].message.content or "").strip()
-    for pattern in [r"```json\s*(.*?)\s*```", r"(\{.*\})"]:
-        match = re.search(pattern, raw, re.DOTALL)
-        if not match:
-            continue
-        try:
-            payload = json.loads(match.group(1))
-            return str(payload.get("message", "")).strip() or None
-        except json.JSONDecodeError:
-            continue
-    return raw[:320] if raw else None
+        parsed = json.loads(result)
+        msg = parsed.get("message", "") if isinstance(parsed, dict) else str(parsed)
+        return msg.strip() if msg else None
+    except json.JSONDecodeError:
+        return result[:320] if result else None
 
 
 def run_task(task_id: str, seed: int = 42) -> Dict[str, object]:

@@ -1,0 +1,34 @@
+name: deal-room
+version: "1.0.0"
+description: "LLM agent navigates multi-stakeholder enterprise contract negotiation — building organizational consensus through coalition-building, veto avoidance, and strategic information management"
+author: "akshaypulla"
+tags:
+  - openenv
+  - negotiation
+  - enterprise
+  - multi-stakeholder
+  - real-world
+  - rl
+tasks:
+  - id: aligned
+    description: "Low-friction enterprise deal — correct document sequencing and engagement order"
+    difficulty: easy
+    max_steps: 8
+    reward_range: [0.0, 1.0]
+  - id: conflicted
+    description: "CTO-CFO tension, Legal-Procurement alliance — coalition sequencing is primary skill"
+    difficulty: medium
+    max_steps: 10
+    reward_range: [0.0, 1.0]
+  - id: hostile_acquisition
+    description: "Post-acquisition authority shift, new compliance requirements — adaptive mapping under pressure"
+    difficulty: hard
+    max_steps: 10
+    reward_range: [0.0, 1.0]
+reward_range: [0.0, 1.0]
+observation_space:
+  type: object
+  description: "Dynamic stakeholder roster, weak signals, discovered constraints, noisy approval proxies, and deal-stage progress"
+action_space:
+  type: object
+  description: "8 action types with dynamic target_ids, optional artifacts, structured offer terms, and natural-language negotiation moves"
