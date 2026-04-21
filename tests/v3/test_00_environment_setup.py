@@ -4,7 +4,7 @@ test_00_environment_setup.py
 DealRoom v3 — Environment Setup & API Key Validation
 
 Validates before any test runs:
-- Required API keys are set (MINIMAX_API_KEY + OPENAI_API_KEY)
+- API keys are optional but discoverable if configured
 - Docker container is running and responsive
 - All server endpoints respond correctly
 """
@@ -26,7 +26,7 @@ if _dotenv.exists():
 
 BASE_URL = os.getenv("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
 CONTAINER_NAME = os.getenv("DEALROOM_CONTAINER_NAME", "dealroom-v3-test")
-REQUIRED_KEYS = ["MINIMAX_API_KEY", "OPENAI_API_KEY"]
+OPTIONAL_KEYS = ["MINIMAX_API_KEY", "OPENAI_API_KEY"]
 
 
 def test_0_1_python_deps():
@@ -48,21 +48,17 @@ def test_0_1_python_deps():
 
 
 def test_0_2_api_keys_configured():
-    print("\n[0.2] API keys...")
-    all_ok = True
-    for key in REQUIRED_KEYS:
+    print("\n[0.2] API keys (optional)...")
+    configured = 0
+    for key in OPTIONAL_KEYS:
         val = os.getenv(key)
         if val and val != f"your_{key.lower()}_key_here":
             display = f"{val[:4]}...{val[-4:]}" if len(val) > 8 else "(set)"
             print(f"  ✓ {key}: {display}")
+            configured += 1
         else:
-            print(f"  ✗ {key}: NOT SET")
-            all_ok = False
-    if not all_ok:
-        print("\n  Fix: cp .env.example .env  →  edit .env with your real keys")
-        print("  Or:  export MINIMAX_API_KEY=...  &&  export OPENAI_API_KEY=...")
-        sys.exit(1)
-    print("  [OK] Both API keys configured")
+            print(f"  ⚠ {key}: NOT SET (runtime should still degrade gracefully)")
+    print(f"  [OK] Optional keys configured: {configured}/{len(OPTIONAL_KEYS)}")
 
 
 def test_0_3_docker_container_running():
@@ -75,7 +71,7 @@ def test_0_3_docker_container_running():
     if not result.stdout.strip():
         print(f"  ✗ Container '{CONTAINER_NAME}' NOT running")
         print(f"  Start: docker run --rm -d -p 7860:7860 \\")
-        print(f"      -e MINIMAX_API_KEY -e OPENAI_API_KEY \\")
+        print(f"      -e MINIMAX_API_KEY \\")
         print(f"      --name {CONTAINER_NAME} dealroom-v3-test:latest")
         sys.exit(1)
     print(f"  ✓ Container '{CONTAINER_NAME}' running")
@@ -88,25 +84,21 @@ def test_0_4_server_endpoints_responsive():
     session = requests.Session()
     session_id = None
 
-    # /health
     r = session.get(f"{BASE_URL}/health", timeout=10)
     assert r.status_code == 200, f"/health failed: {r.status_code}"
     print("  ✓ GET /health → 200")
 
-    # /metadata
     r = session.get(f"{BASE_URL}/metadata", timeout=10)
     assert r.status_code == 200, f"/metadata failed: {r.status_code}"
     print("  ✓ GET /metadata → 200")
 
-    # /reset
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned"}, timeout=30)
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned"}, timeout=30)
     assert r.status_code == 200, f"/reset failed: {r.status_code}"
     obs = r.json()
     session_id = obs.get("metadata", {}).get("session_id") or obs.get("session_id")
     assert session_id, "No session_id in reset response"
     print("  ✓ POST /reset → 200")
 
-    # /step
     r = session.post(
         f"{BASE_URL}/step",
         json={
@@ -117,7 +109,7 @@ def test_0_4_server_endpoints_responsive():
             "documents": [],
             "lookahead": None,
         },
-        timeout=60,
+        timeout=30,
     )
     assert r.status_code == 200, f"/step failed: {r.status_code}"
     print("  ✓ POST /step → 200")

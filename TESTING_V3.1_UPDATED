@@ -1,0 +1,619 @@
+# DealRoom v3 — Testing (Updated)
+
+> **Document status:** Reflects current passing tests plus new tests required
+> for the four fixes. All currently-passing tests are documented as-is.
+> New test sections are clearly marked.
+
+---
+
+## Test Suite Overview
+
+Two execution contexts:
+
+**HTTP tests** — run against live server at `http://127.0.0.1:7860`:
+`test_00` through `test_05`, `test_09`, `test_11`
+
+**Container unit tests** — run inside container via `docker exec`:
+`test_06`, `test_07`, `test_08`, `test_10`, `test_scorer_unit`
+
+The v3 suite (`tests/v3/`) is the primary validation suite.
+Older directories (`tests/unit/`, `tests/integration/`) may contain legacy tests.
+
+---
+
+## The 12 Research Properties
+
+| # | Property | Test | Current status |
+|---|----------|------|----------------|
+| P1 | G hidden from observation | test_01, test_11 | ✅ Passing |
+| P2 | Reset regenerates G | test_05, test_11 | ✅ Passing |
+| P3 | CVaR veto despite EU>0 | test_08, test_11 | ✅ Computed, ❌ not terminal |
+| P4 | 5D reward discriminative | test_02, test_11 | ✅ Passing |
+| P5 | Lookahead costs 0.07 | test_02, test_11 | ✅ Passing |
+| P6 | Noise not cancellable | test_03, test_11 | ✅ Passing |
+| P7 | Cross-stakeholder echoes | test_03, test_11 | ✅ Passing |
+| P8 | Weak signals present | test_03, test_11 | ✅ Passing |
+| P9 | r^causal varies with centrality | test_02, test_11 | ✅ Passing |
+| P10 | Every reset different G | test_05, test_11 | ✅ Passing |
+| P11 | Full episode no crash | test_09, test_11 | ✅ Passing |
+| P12 | Training imports work | test_10, test_11 | ✅ Passing |
+| — | CVaR veto terminates episode | test_04 | ❌ Not wired |
+| — | Agent reads stakeholder responses | test_01 | ❌ Always empty |
+
+---
+
+## Currently Passing Tests (Do Not Modify)
+
+---
+
+### `test_00_environment_setup.py` — ✅ All Passing
+
+Infrastructure prerequisites.
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_0_1_python_deps` | `import requests, numpy` | No ImportError |
+| `test_0_2_api_keys_configured` | `MINIMAX_API_KEY` env var | Set and not placeholder |
+| `test_0_3_docker_container_running` | `docker ps` | `dealroom-v3-test` running |
+| `test_0_4_server_endpoints_responsive` | GET /health /metadata, POST /reset /step | All HTTP 200 |
+| `test_0_5_llm_client_imports` | `import llm_client` | Succeeds (warns if missing) |
+
+**Note on test_0_2:** Only `MINIMAX_API_KEY` is checked. `OPENAI_API_KEY` is
+not required — utterance scorer is pure Python.
+
+---
+
+### `test_01_schema_validation.py` — ✅ All Passing
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_1_1_all_required_fields_present` | 18 fields in reset obs | All 18 present |
+| `test_1_2_no_hidden_fields_exposed` | Recursive scan for G, tau_i, etc. | None found |
+| `test_1_3_field_types_correct` | Type checks after step | Types match spec |
+| `test_1_4_engagement_history_window_size` | `engagement_history` length | ≥ 5 entries |
+| `test_1_5_engagement_level_delta_single_float` | `engagement_level_delta` type | Numeric, not dict |
+| `test_1_6_cross_stakeholder_echoes_is_list` | Echo structure | List of dicts with sender field |
+| `test_1_7_stakeholder_messages_populated_after_step` | `stakeholder_messages` type | Is dict (currently `{}`) |
+| `test_1_8_action_schema_accepts_lookahead` | Lookahead action POST | HTTP 200 |
+| `test_1_9_approval_path_progress_structure` | `band` field | In valid set |
+| `test_1_10_deal_stage_valid_transitions` | stage + round_number | Both correct |
+| `test_1_11_documents_field_format` | send_document action | Reward returned |
+
+**Note on test_1_7:** Currently passes by checking only that the field is a dict
+(not that it is non-empty). After Fix #2, update this test — see new test section.
+
+---
+
+### `test_02_reward_integrity.py` — ✅ All Passing
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_2_1_reward_is_single_float` | Reward type | Numeric, in [0,1] |
+| `test_2_2_lookahead_cost_is_exactly_007` | With/without lookahead diff | `diff = 0.07 ± 0.015` |
+| `test_2_3_reward_in_range_after_valid_actions` | 3 action types | All in [0,1] |
+| `test_2_4_deterministic_reward_with_seed` | Same seed × 3 | Low variance |
+| `test_2_5_repeat_same_action_does_not_escalate` | Same action × 3 | g3 - g1 not systematically +ve |
+| `test_2_6_different_targets_different_causal` | Finance/Legal/TechLead | ≥ 2 distinct values |
+| `test_2_7_informative_action_outperforms_empty` | Empty vs send_document | `g_subst >= g_empty - 0.1` |
+| `test_2_8_reward_non_trivial_variance` | 5 action types | Variance > 0.01 |
+| `test_2_9_good_docs_higher_than_poor` | Poor vs DPA+cert | `avg_good >= avg_poor - 0.05` |
+
+**Note on test_2_2:** Tolerance is `±0.015`. After confirming scorer determinism
+end-to-end, this should tighten to `±0.001` (pure Python = exact arithmetic).
+The lookahead flag extraction is working so the 0.07 deduction is correct. The
+remaining tolerance covers HTTP round-trip state variance across two separate resets.
+
+---
+
+### `test_03_causal_inference.py` — ✅ All Passing
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_3_1_targeted_stakeholder_engagement_changes` | Finance targeted | delta is numeric |
+| `test_3_2_cross_stakeholder_echoes_detected` | 8 episodes | ≥ 30% have echoes |
+| `test_3_3_engagement_history_window_slides` | 3 steps | Window size unchanged |
+| `test_3_4_engagement_noise_not_cancellable` | 5 same actions | ≥ 2 non-zero deltas |
+| `test_3_5_different_targets_different_patterns` | Finance vs Legal | Mean delta distance > 0.001 |
+| `test_3_6_weak_signals_for_non_targeted` | 12 episodes | ≥ 20% have weak signals |
+| `test_3_7_echo_content_structure` | Echo dict | Has sender field |
+| `test_3_8_causal_signal_responds_to_graph` | ExecSponsor vs TechLead | Variance differs |
+
+---
+
+### `test_04_cvar_veto.py` — ⚠️ Passing With Warnings (Fix #1 Required)
+
+| Test | Checks | Current status |
+|------|--------|----------------|
+| `test_4_1_veto_precursor_before_veto` | 18 rounds hostile+aggressive | ✅ Passes — precursors seen |
+| `test_4_2_aligned_no_early_veto` | First step aligned | ✅ Passes |
+| `test_4_3_veto_terminates_episode` | 20 rounds hostile+aggressive | ⚠️ Warns "veto not triggered" |
+| `test_4_4_timeout_terminates` | Run to max_rounds+2 | ✅ Passes |
+| `test_4_5_scenario_difficulty_differentiation` | hostile vs aligned precursors | ✅ Passes |
+| `test_4_6_veto_precursor_is_stakeholder_specific` | Track precursor stakeholders | ✅ Passes |
+| `test_4_7_cveto_not_just_eu` | 18 rounds hostile+aggressive | ⚠️ Warns |
+
+**Why test_4_3 warns:** `_check_veto_termination()` is not yet called from `step()`.
+Veto precursors are computed (these tests pass) but CVaR exceeding tau does not set
+`done=True`. After Fix #1, tests 4.3 and 4.7 should pass without warnings.
+
+---
+
+### `test_05_episode_isolation.py` — ✅ All Passing
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_5_1_different_seeds_different_initial_state` | Seeds 42 vs 43 | Total engagement diff > 0.001 |
+| `test_5_2_round_number_resets_to_zero` | 3 steps then reset | round_number=0 |
+| `test_5_3_done_false_after_reset` | All 3 scenarios | done=False |
+| `test_5_4_engagement_history_initialized` | History length | ≥ 5 entries |
+| `test_5_5_round_number_increments_correctly` | 5 steps | Each round matches expected |
+| `test_5_6_all_three_scenarios_work` | aligned/conflicted/hostile | HTTP 200 |
+| `test_5_7_same_session_state_across_steps` | 2 steps | round increments |
+| `test_5_8_reset_clears_all_session_state` | 3 steps then reset | round=0, done=False |
+
+---
+
+### `test_06_probabilistic_signals.py` — ✅ All Passing (Container)
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_6_1_weak_signals_field_exists` | env.reset() | Field present |
+| `test_6_2_cross_stakeholder_echoes_exists` | env.reset() | Field present |
+| `test_6_3_echo_structure` | `_generate_cross_stakeholder_echoes()` | List of dicts with sender |
+| `test_6_4_weak_signals_populated_after_action` | env.step() | Is dict |
+| `test_6_5_echo_firing_rate_nonzero` | 20 episodes | Rate > 0% |
+| `test_6_6_weak_signal_threshold_respected` | OBS_CONFIG check | hard_threshold=0.12 |
+| `test_6_7_echo_recall_probability_configured` | OBS_CONFIG check | echo_recall=0.70 |
+
+---
+
+### `test_07_causal_graph.py` — ✅ All Passing (Container)
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_7_1_propagation_direction` | A→B graph | B increases, C unaffected |
+| `test_7_2_signal_carries_through_edge` | A→B, change A | B changes |
+| `test_7_3_damping_prevents_runaway` | Dense graph 5 steps | All beliefs in (0,1) |
+| `test_7_4_beliefs_normalized_after_propagation` | Post-propagation | Sum = 1.0 ± 1e-6 |
+| `test_7_5_no_self_loops` | All scenarios/seeds | No (X,X) edges |
+| `test_7_6_exec_sponsor_outgoing_authority` | 10 seeds × 3 scenarios | ≥ 2 outgoing edges |
+| `test_7_7_hub_centrality_beats_leaf` | Hub-and-spoke graph | Hub betweenness ≥ max leaf |
+| `test_7_8_graph_identifiability` | 20 sampled graphs | All 190 pairs distinguishable |
+
+---
+
+### `test_08_cvar_preferences.py` — ✅ All Passing (Container)
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_8_1_core_claim` | Legal + no DPA + low liability | EU > 0 AND CVaR > tau AND CVaR > EU |
+| `test_8_2_good_docs_lower_cvar` | DPA+cert+high liability vs none | cvar_good < cvar_poor |
+| `test_8_3_cvar_formula_correct` | Known distributions | Correct ordering |
+| `test_8_4_tau_ordering` | All archetypes | legal_tau < finance_tau < exec_tau |
+| `test_8_5_aggressive_timeline_higher_cvar` | 4wk vs 16wk for TechLead | cvar_4wk > cvar_16wk |
+| `test_8_6_cvar_subadditivity_sanity` | CVaR ≤ max outcome | Coherence holds |
+
+---
+
+### `test_09_full_episode_e2e.py` — ✅ All Passing
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_9_1_aligned_completes` | 20 steps aligned+neutral | steps ≥ 1 |
+| `test_9_2_conflicted_completes` | 20 steps conflicted+comprehensive | steps ≥ 1 |
+| `test_9_3_hostile_aggressive_produces_veto_or_timeout` | 15 steps hostile+aggressive | terminal in valid set |
+| `test_9_4_reward_collected_across_episode` | Reward list | len ≥ 1 |
+| `test_9_5_reward_variance_non_trivial` | 12 steps aligned+comprehensive | Reward not constant |
+| `test_9_6_strategy_comparison_possible` | comprehensive vs aggressive × 3 | Scores collected |
+| `test_9_7_terminal_outcome_meaningful` | All 9 scenario×strategy combos | Non-empty terminals |
+| `test_9_8_multidocument_action_works` | 3 docs to Legal | HTTP 200, reward returned |
+
+---
+
+### `test_10_training_infrastructure.py` — ✅ All Passing (Container)
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_10_1_grpo_trainer_imports` | `import grpo_trainer` | GRPOTrainer + TrainingMetrics found |
+| `test_10_2_training_metrics_fields` | TrainingMetrics fields | All 6 reward curve fields |
+| `test_10_3_curriculum_generator_imports` | `import adaptive_generator` | Found |
+| `test_10_4_colab_notebook_exists` | /app/env/grpo_colab.ipynb | ≥ 5 cells |
+| `test_10_5_training_loop_smoke_test` | GRPOTrainer.__init__ | Class defined |
+| `test_10_6_checkpoint_save_load_smoke` | import torch | Optional, warns if missing |
+
+---
+
+### `test_11_research_properties.py` — ✅ 12/12 Passing
+
+All 12 properties confirmed. P3 (CVaR veto fires) is verified mathematically
+(test_8_1 confirms EU>0 and CVaR>tau). The veto termination wiring (Fix #1)
+is what P3 requires for training completeness — it is architectural, not a
+property of the CVaR math itself.
+
+---
+
+### `test_scorer_unit.py` — ✅ 13/13 Passing (Container)
+
+| Test | Checks | Pass criteria |
+|------|--------|---------------|
+| `test_lookahead_cost_exactly_0_07` | `LOOKAHEAD_COST == 0.07` | Exact equality |
+| `test_log2_6_correct` | `LOG2_6 == np.log2(6)` | Diff < 1e-6 |
+| `test_lookahead_penalty_applied` | With vs without lookahead | diff = 0.07 |
+| `test_all_dimensions_bounded_0_1` | 20 random calls | All dims in [0,1] |
+| `test_goal_score_increases_with_approval` | Positive vs negative delta | pos.goal > 0.5 > neg.goal |
+| `test_trust_targeted_delta` | Targeted vs untargeted | targeted > 0.5, untargeted ≈ 0.5 |
+| `test_information_entropy_reduction` | Uniform → certain | info > 0.5 |
+| `test_determinism_consistency` | 10 identical calls | All identical |
+| `test_prediction_accuracy` | `compute_prediction_accuracy` | Between 0 and 1 |
+| `test_scorer_reset` | Two calls same inputs | Same result |
+| `test_risk_cvar_no_profile_returns_0_5` | risk_profiles=None | risk == 0.5 |
+| `test_causal_no_targets_returns_0` | target_ids=[] | causal == 0.0 |
+| `test_blocker_resolution_affects_goal` | Blockers resolved | resolved.goal > same.goal |
+
+---
+
+## New Tests Required (After Fixes Applied)
+
+---
+
+### New: `test_04` additions for Fix #1 (CVaR Veto Termination)
+
+Add these three tests to `test_04_cvar_veto.py` after implementing `_check_veto_termination()`.
+
+```python
+def test_4_3_veto_terminates_episode():
+    """
+    After Fix #1: veto must set done=True and terminal_outcome='veto'.
+    Previously warned — must now pass without warning.
+    """
+    BASE = os.environ.get("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+    requests.post(f"{BASE}/reset", json={"task": "hostile_acquisition"})
+
+    veto_fired = False
+    for _ in range(20):
+        r = requests.post(f"{BASE}/step", json={
+            "action_type": "exec_escalation",
+            "target_ids": ["Legal"],
+            "message": "Legal must sign immediately or we withdraw all compliance commitments.",
+            "documents": []
+        }, timeout=30)
+        result = r.json()
+        obs = result.get("observation", result)
+        if obs.get("done", False):
+            terminal = result.get("info", {}).get("terminal_outcome", "")
+            if "veto" in str(terminal).lower():
+                veto_fired = True
+            break
+
+    assert veto_fired, (
+        "Veto did not fire in 20 aggressive rounds of hostile_acquisition.\n"
+        "Check: _check_veto_termination() called in step()?\n"
+        "Check: veto_power=True on Legal and Finance in archetypes?"
+    )
+
+
+def test_4_8_veto_adds_terminal_penalty():
+    """
+    When veto fires, reward should include the terminal penalty (-1.0 * TERMINAL_WEIGHT).
+    The step that triggers veto should have a lower total reward than normal steps.
+    """
+    from deal_room.rewards.utterance_scorer import LOOKAHEAD_COST
+    from deal_room.environment.constants import TERMINAL_REWARDS, TERMINAL_WEIGHT
+
+    BASE = os.environ.get("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+    requests.post(f"{BASE}/reset", json={"task": "hostile_acquisition"})
+
+    rewards = []
+    terminal_reward = None
+    for _ in range(20):
+        r = requests.post(f"{BASE}/step", json={
+            "action_type": "exec_escalation",
+            "target_ids": ["Legal"],
+            "message": "Sign immediately.",
+            "documents": []
+        }, timeout=30)
+        result = r.json()
+        obs = result.get("observation", result)
+        reward = float(result.get("reward", 0))
+        rewards.append(reward)
+        if obs.get("done", False):
+            terminal_reward = reward
+            break
+
+    if terminal_reward is not None:
+        # Terminal step reward should reflect veto penalty
+        expected_penalty = TERMINAL_WEIGHT * TERMINAL_REWARDS["veto"]   # -2.0
+        # terminal_reward should be significantly lower than mid-episode rewards
+        mid_episode_mean = sum(rewards[:-1]) / len(rewards[:-1]) if len(rewards) > 1 else 0
+        assert terminal_reward < mid_episode_mean, (
+            f"Terminal reward {terminal_reward:.3f} should be < mid-episode mean "
+            f"{mid_episode_mean:.3f} when veto fires"
+        )
+
+
+def test_4_9_veto_stakeholder_identified_in_info():
+    """
+    info dict must contain terminal_outcome='veto' and veto_stakeholder=<sid>
+    when veto terminates the episode.
+    """
+    BASE = os.environ.get("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+    requests.post(f"{BASE}/reset", json={"task": "hostile_acquisition"})
+
+    for _ in range(20):
+        r = requests.post(f"{BASE}/step", json={
+            "action_type": "exec_escalation",
+            "target_ids": ["Legal"],
+            "message": "Sign immediately.",
+            "documents": []
+        }, timeout=30)
+        result = r.json()
+        obs = result.get("observation", result)
+        if obs.get("done", False):
+            info = result.get("info", {})
+            assert info.get("terminal_outcome") == "veto", (
+                f"terminal_outcome should be 'veto', got {info.get('terminal_outcome')}"
+            )
+            assert info.get("veto_stakeholder") in ["Legal", "Finance", "ExecSponsor"], (
+                f"veto_stakeholder should be a veto-power stakeholder, "
+                f"got {info.get('veto_stakeholder')}"
+            )
+            return
+
+    # If no veto in 20 rounds, skip (stochastic)
+    pytest.skip("Veto not triggered in 20 rounds — stochastic environment")
+```
+
+---
+
+### New: `test_01` update for Fix #2 (stakeholder_messages)
+
+Replace `test_1_7` in `test_01_schema_validation.py` after implementing Fix #2:
+
+```python
+def test_1_7_stakeholder_messages_populated_after_step():
+    """
+    After Fix #2: stakeholder_messages must be non-empty after a step.
+    Previously only checked it was a dict (always {}).
+    Now verifies responses are actually in the observation.
+    """
+    BASE = os.environ.get("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+    requests.post(f"{BASE}/reset", json={"task": "aligned"})
+    r = requests.post(f"{BASE}/step", json={
+        "action_type": "send_document",
+        "target_ids": ["Legal"],
+        "message": "Please find the DPA attached.",
+        "documents": [{"name": "dpa", "content": "Standard DPA terms."}]
+    }, timeout=30)
+    obs = r.json().get("observation", r.json())
+    messages = obs.get("stakeholder_messages", {})
+
+    assert isinstance(messages, dict), "stakeholder_messages must be a dict"
+    assert len(messages) > 0, (
+        "stakeholder_messages is empty — Fix #2 not applied.\n"
+        "Check: _build_observation() receives stakeholder_responses parameter."
+    )
+    for sid, msg in messages.items():
+        assert msg, f"Empty message for stakeholder {sid}"
+```
+
+---
+
+### New: `test_00` update for Fix #4 (Lazy API Key Validation)
+
+Add to `test_00_environment_setup.py`:
+
+```python
+def test_0_6_environment_instantiates_without_api_key():
+    """
+    After Fix #4: DealRoomV3() must be instantiable without MINIMAX_API_KEY.
+    Previously raised EnvironmentError at __init__.
+    This unblocks container unit tests that don't make LLM calls.
+
+    Run inside container: docker exec dealroom-v3-test python -c "..."
+    """
+    import subprocess
+    result = subprocess.run(
+        ["docker", "exec", "dealroom-v3-test",
+         "python", "-c",
+         "import os; "
+         "del os.environ['MINIMAX_API_KEY'] if 'MINIMAX_API_KEY' in os.environ else None; "
+         "from deal_room.environment.dealroom_v3 import DealRoomV3; "
+         "env = DealRoomV3(); "
+         "print('PASSED: DealRoomV3 instantiated without API key')"],
+        capture_output=True, text=True, timeout=30
+    )
+    assert "PASSED" in result.stdout, (
+        f"DealRoomV3 still raises on instantiation without API key.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}\n"
+        f"Fix #4 not applied: validate_api_keys() still in __init__."
+    )
+```
+
+---
+
+### New: `test_scorer_unit.py` additions
+
+Add to `test_scorer_unit.py`:
+
+```python
+def test_lookahead_cost_imported_not_hardcoded():
+    """
+    LOOKAHEAD_COST must be importable from utterance_scorer.
+    All other files import from here — no hardcoded 0.07 elsewhere.
+    """
+    from deal_room.rewards.utterance_scorer import LOOKAHEAD_COST
+    assert LOOKAHEAD_COST == 0.07
+    # Verify no other definition exists
+    import subprocess
+    result = subprocess.run(
+        ["grep", "-rn", "LOOKAHEAD_COST\\s*=", "deal_room/", "tests/"],
+        capture_output=True, text=True
+    )
+    definitions = [l for l in result.stdout.strip().split('\n')
+                   if l and '= 0.07' in l and 'import' not in l]
+    assert len(definitions) == 1, (
+        f"LOOKAHEAD_COST defined in multiple places: {definitions}\n"
+        "Should be defined only in utterance_scorer.py"
+    )
+
+
+def test_reward_weights_not_simple_average():
+    """
+    _compute_reward must use weighted_sum(REWARD_WEIGHTS), not /5.0.
+    Verify by checking that causal weight is 0.15, not 0.20.
+    """
+    from deal_room.rewards.utterance_scorer import UtteranceScorer
+    from deal_room.environment.constants import REWARD_WEIGHTS
+
+    # If simple average, all weights = 0.20
+    # Causal must be 0.15 (intentionally lower)
+    assert REWARD_WEIGHTS["causal"] == 0.15, (
+        f"causal weight is {REWARD_WEIGHTS['causal']}, expected 0.15. "
+        "Check that weighted_sum is used, not /5.0."
+    )
+    assert REWARD_WEIGHTS["goal"] == 0.25, (
+        f"goal weight is {REWARD_WEIGHTS['goal']}, expected 0.25."
+    )
+    assert abs(sum(REWARD_WEIGHTS.values()) - 1.0) < 1e-6, (
+        "REWARD_WEIGHTS must sum to 1.0"
+    )
+```
+
+---
+
+### New: `test_02` tightened lookahead tolerance
+
+After confirming end-to-end determinism (same seed, same state, cache hit), tighten
+test_2_2's tolerance:
+
+```python
+def test_2_2_lookahead_cost_is_exactly_007():
+    """
+    Pure Python scorer = exact arithmetic.
+    Tolerance tightened from 0.015 to 0.001 after confirming determinism.
+    Both calls use same seed → same G → same state → same base score → exact 0.07 diff.
+    """
+    from deal_room.rewards.utterance_scorer import LOOKAHEAD_COST
+    BASE = os.environ.get("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+
+    msg = "We have prepared a detailed ROI analysis for your review."
+
+    requests.post(f"{BASE}/reset", json={"task": "aligned", "seed": 42})
+    r1 = requests.post(f"{BASE}/step", json={
+        "action_type": "direct_message", "target_ids": ["Finance"],
+        "message": msg, "documents": [], "lookahead": None
+    }, timeout=30)
+    goal_base = float(r1.json().get("reward", 0))
+
+    requests.post(f"{BASE}/reset", json={"task": "aligned", "seed": 42})
+    r2 = requests.post(f"{BASE}/step", json={
+        "action_type": "direct_message", "target_ids": ["Finance"],
+        "message": msg, "documents": [],
+        "lookahead": {"depth": 2, "n_hypotheses": 2, "action_draft": None}
+    }, timeout=30)
+    goal_with = float(r2.json().get("reward", 0))
+
+    expected = max(0.0, goal_base - LOOKAHEAD_COST)
+    assert abs(goal_with - expected) < 0.001, (
+        f"Lookahead cost wrong.\n"
+        f"  goal_base={goal_base:.4f}, goal_with={goal_with:.4f}\n"
+        f"  expected={expected:.4f}, diff={abs(goal_with - expected):.6f}\n"
+        f"  If diff > 0.001: check lookahead_was_requested extraction is FIRST line of step()"
+    )
+```
+
+---
+
+## Updated Test 11 for Post-Fix Validation
+
+After applying all four fixes, add P13 and P14 to `test_11_research_properties.py`:
+
+```python
+def p13_veto_terminates_episode():
+    """
+    P13 (new): CVaR veto must set done=True.
+    Requires Fix #1 applied.
+    """
+    BASE = os.environ.get("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+    requests.post(f"{BASE}/reset", json={"task": "hostile_acquisition"})
+    for _ in range(20):
+        r = requests.post(f"{BASE}/step", json={
+            "action_type": "exec_escalation",
+            "target_ids": ["Legal"],
+            "message": "Sign now.", "documents": []
+        }, timeout=30)
+        obs = r.json().get("observation", r.json())
+        if obs.get("done", False):
+            info = r.json().get("info", {})
+            assert info.get("terminal_outcome") == "veto"
+            return
+    pytest.skip("Veto not triggered stochastically")
+
+
+def p14_agent_reads_stakeholder_responses():
+    """
+    P14 (new): stakeholder_messages must be non-empty after a step.
+    Requires Fix #2 applied.
+    """
+    BASE = os.environ.get("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+    requests.post(f"{BASE}/reset", json={"task": "aligned"})
+    r = requests.post(f"{BASE}/step", json={
+        "action_type": "send_document",
+        "target_ids": ["Legal"],
+        "message": "DPA attached.", "documents": [{"name": "dpa", "content": "..."}]
+    }, timeout=30)
+    obs = r.json().get("observation", r.json())
+    messages = obs.get("stakeholder_messages", {})
+    assert len(messages) > 0, "stakeholder_messages empty — Fix #2 not applied"
+```
+
+---
+
+## Running Tests
+
+### Setup (single key):
+```bash
+export MINIMAX_API_KEY=your_key
+# OPENAI_API_KEY not required
+```
+
+### Full HTTP suite:
+```bash
+cd tests/v3
+export DEALROOM_BASE_URL=http://127.0.0.1:7860
+python test_00_environment_setup.py
+python test_01_schema_validation.py
+python test_02_reward_integrity.py
+python test_03_causal_inference.py
+python test_04_cvar_veto.py
+python test_05_episode_isolation.py
+python test_09_full_episode_e2e.py
+python test_11_research_properties.py
+```
+
+### Container unit tests:
+```bash
+docker exec dealroom-v3-test python /app/env/tests/v3/test_06_probabilistic_signals.py
+docker exec dealroom-v3-test python /app/env/tests/v3/test_07_causal_graph.py
+docker exec dealroom-v3-test python /app/env/tests/v3/test_08_cvar_preferences.py
+docker exec dealroom-v3-test python /app/env/tests/v3/test_10_training_infrastructure.py
+docker exec dealroom-v3-test python /app/env/tests/v3/test_scorer_unit.py
+```
+
+### Step timeouts:
+```bash
+# Each step completes in <10s (deliberation has internal 5s timeout)
+# Use --timeout=30 for pytest
+pytest tests/v3/ -v --timeout=30
+```
+
+---
+
+## Key Design Principles
+
+1. **MINIMAX_API_KEY only** — no OPENAI_API_KEY required anywhere
+2. **Pure Python scorer** — deterministic, no cache, no LLM calls
+3. **LOOKAHEAD_COST imported, not hardcoded** — single definition in `utterance_scorer.py`
+4. **REWARD_WEIGHTS in constants.py** — imported by both `dealroom_v3.py` and `grpo_trainer.py`
+5. **30s step timeout** — deliberation has internal 5s limit, step always under 10s
+6. **Veto termination required for training** — Fix #1 must be applied before GRPO training

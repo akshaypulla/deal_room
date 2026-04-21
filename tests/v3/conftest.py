@@ -20,26 +20,17 @@ if _dotenv_path.exists():
 BASE_URL = os.getenv("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
 CONTAINER_NAME = os.getenv("DEALROOM_CONTAINER_NAME", "dealroom-v3-test")
 
-REQUIRED_ENV_VARS = ["MINIMAX_API_KEY", "OPENAI_API_KEY"]
+OPTIONAL_ENV_VARS = ["MINIMAX_API_KEY", "OPENAI_API_KEY"]
 
 
 def validate_api_keys():
-    """Fail fast if required API keys are not set."""
-    missing = [v for v in REQUIRED_ENV_VARS if not os.getenv(v)]
+    """Report API keys, but do not fail because the runtime is fail-soft."""
+    configured = [v for v in OPTIONAL_ENV_VARS if os.getenv(v)]
+    missing = [v for v in OPTIONAL_ENV_VARS if not os.getenv(v)]
+    if configured:
+        print(f"Configured optional API keys: {configured}")
     if missing:
-        print("=" * 62)
-        print("ERROR: Required environment variables are not set:")
-        for v in missing:
-            print(f"  - {v}")
-        print()
-        print("Copy .env.example to .env and fill in your keys:")
-        print("  cp .env.example .env")
-        print()
-        print("Or export them directly:")
-        for v in missing:
-            print(f"  export {v}=your_key_here")
-        print("=" * 62)
-        sys.exit(1)
+        print(f"Missing optional API keys (fail-soft mode): {missing}")
 
 
 def check_container_running():
@@ -62,7 +53,6 @@ def ensure_container():
         return
     print(f"Container '{CONTAINER_NAME}' not running. Starting...")
     minimax_key = os.getenv("MINIMAX_API_KEY", "")
-    openai_key = os.getenv("OPENAI_API_KEY", "")
     subprocess.run(
         [
             "docker",
@@ -73,8 +63,6 @@ def ensure_container():
             "7860:7860",
             "-e",
             f"MINIMAX_API_KEY={minimax_key}",
-            "-e",
-            f"OPENAI_API_KEY={openai_key}",
             "--name",
             CONTAINER_NAME,
             "dealroom-v3-test:latest",
@@ -90,7 +78,7 @@ def get_session(task="aligned", seed=None):
     """Get a fresh requests Session and initial observation."""
     import requests
 
-    payload = {"task": task}
+    payload = {"task_id": task}
     if seed is not None:
         payload["seed"] = seed
     session = requests.Session()
@@ -114,7 +102,7 @@ def make_action(
     }
 
 
-def step(session, session_id, action, timeout=60):
+def step(session, session_id, action, timeout=30):
     """Execute a step and return the parsed result."""
     import requests
 

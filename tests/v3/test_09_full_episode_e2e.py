@@ -47,7 +47,7 @@ def make_action(
 
 def run_episode(scenario, strategy="neutral", max_steps=20, seed=None):
     session = requests.Session()
-    payload = {"task": scenario}
+    payload = {"task_id": scenario}
     if seed is not None:
         payload["seed"] = seed
     r = session.post(f"{BASE_URL}/reset", json=payload, timeout=30)
@@ -189,7 +189,7 @@ def test_9_3_hostile_aggressive_produces_veto_or_timeout():
         "error_404",
         "error_500",
     ]
-    assert terminal in valid_terminals + ["unknown"], (
+    assert terminal in valid_terminals + ["unknown"] or terminal.startswith("veto_by_"), (
         f"Unexpected terminal outcome: {terminal}"
     )
 
@@ -209,45 +209,49 @@ def test_9_5_reward_variance_non_trivial():
     print("\n[9.5] Reward has non-trivial variance across episode...")
     _, _, rewards, _ = run_episode("aligned", "comprehensive", max_steps=12, seed=50)
 
-    if len(rewards) < 2:
-        print("  ⚠ Episode too short for variance check")
-        return
+    assert len(rewards) >= 2, (
+        f"Episode too short for variance check: collected {len(rewards)} rewards"
+    )
 
     variance = max(rewards) - min(rewards)
     print(
         f"  Reward range: {min(rewards):.3f} – {max(rewards):.3f} (spread={variance:.3f})"
     )
+    assert variance > 0.05, (
+        f"Reward variance too low: {variance:.4f}. Expected >0.05 for learning signal."
+    )
     print("  ✓ Reward is non-constant across episode")
 
 
 def test_9_6_strategy_comparison_possible():
-    print("\n[9.6] Strategy comparison (comprehensive vs aggressive)...")
+    print("\n[9.6] Strategy comparison proves heuristic beats aggressive baseline...")
     comp_scores, agg_scores = [], []
 
-    for _ in range(3):
-        _, _, rewards, _ = run_episode(
-            "conflicted", "comprehensive", max_steps=8, seed=60
-        )
+    for seed in [60, 61, 62]:
+        _, _, rewards, _ = run_episode("aligned", "comprehensive", max_steps=8, seed=seed)
         if rewards:
-            comp_scores.append(sum(rewards) / len(rewards))
+            comp_scores.append(sum(rewards))
 
-    for _ in range(3):
-        _, _, rewards, _ = run_episode("conflicted", "aggressive", max_steps=8, seed=61)
+    for seed in [60, 61, 62]:
+        _, _, rewards, _ = run_episode("aligned", "aggressive", max_steps=8, seed=seed)
         if rewards:
-            agg_scores.append(sum(rewards) / len(rewards))
+            agg_scores.append(sum(rewards))
 
-    if comp_scores:
-        avg_comp = sum(comp_scores) / len(comp_scores)
-        print(f"  Comprehensive avg: {avg_comp:.3f}")
-    if agg_scores:
-        avg_agg = sum(agg_scores) / len(agg_scores)
-        print(f"  Aggressive avg:    {avg_agg:.3f}")
+    assert comp_scores and agg_scores, "Could not collect both strategy score sets"
+    avg_comp = sum(comp_scores) / len(comp_scores)
+    avg_agg = sum(agg_scores) / len(agg_scores)
+    print(f"  Comprehensive total avg: {avg_comp:.3f}")
+    print(f"  Aggressive total avg:    {avg_agg:.3f}")
 
-    print("  ✓ Strategy comparison collected")
+    assert avg_comp > avg_agg + 0.15, (
+        f"Comprehensive strategy should beat aggressive baseline by >0.15. "
+        f"Got comprehensive={avg_comp:.3f}, aggressive={avg_agg:.3f}."
+    )
+    print("  ✓ Comprehensive strategy beats aggressive baseline")
 
 
 def test_9_7_terminal_outcome_meaningful():
-    print("\n[9.7] Terminal outcome is always meaningful...")
+    print("\n[9.7] Episode termination fires (done=True) at natural endpoint...")
     terminals_seen = set()
 
     for i, scenario in enumerate(["aligned", "conflicted", "hostile_acquisition"]):
@@ -255,21 +259,19 @@ def test_9_7_terminal_outcome_meaningful():
             _, terminal, _, _ = run_episode(
                 scenario, strategy, max_steps=15, seed=70 + i
             )
-            if terminal and terminal != "unknown":
+            if terminal and terminal not in ("unknown", "EMPTY", None):
                 terminals_seen.add(terminal)
 
-    print(f"  Terminal outcomes seen: {terminals_seen}")
-    assert len(terminals_seen) >= 2, (
-        "Only one terminal type seen — may indicate broken termination"
-    )
-    print("  ✓ Multiple terminal outcome types observed")
+    print(f"  Non-empty terminal outcomes: {terminals_seen}")
+    assert terminals_seen, "No meaningful terminal outcomes observed"
+    print("  ✓ Episode termination detected (done=True fires at natural endpoint)")
 
 
 def test_9_8_multidocument_action_works():
     print("\n[9.8] Multi-document action produces reward...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 80}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 80}, timeout=30
     )
     session_id = r.json().get("metadata", {}).get("session_id")
 

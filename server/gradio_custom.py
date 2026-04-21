@@ -1215,7 +1215,25 @@ def build_custom_tab(
             return f"<div class='how-it-works {hidden_class}'></div>"
         return """
         <div class="how-it-works">
-            <h3>🎮 How It Works</h3>
+            <h3>Judge Mode: 3 Things To Watch</h3>
+            <ol>
+                <li><strong>Graph inference:</strong> target one stakeholder and watch cross-stakeholder echoes reveal hidden influence.</li>
+                <li><strong>Reward improvement:</strong> compare careful evidence-sharing against aggressive escalation.</li>
+                <li><strong>CVaR veto:</strong> hostile, risky pressure can trigger a stakeholder-specific veto.</li>
+            </ol>
+            <p><strong>Recommended path:</strong> Start Simple Round, send evidence to Finance or Legal, then run the round.</p>
+            <div class="scoring-info">
+                <h4>Advanced details are hidden by default</h4>
+                <div class="scoring-item"><span class="scoring-item-name">Detailed controls</span><span class="scoring-item-weight">Advanced panel</span></div>
+                <div class="scoring-item"><span class="scoring-item-name">Lookahead/curriculum diagnostics</span><span class="scoring-item-weight">Developer report</span></div>
+            </div>
+        </div>
+        """
+
+    def _build_advanced_instructions() -> str:
+        return """
+        <div class="how-it-works">
+            <h3>Full Controls</h3>
             <ol>
                 <li><strong>Click "Start Simple Round"</strong> to begin the negotiation</li>
                 <li><strong>Click a stakeholder seat</strong> to see their concerns and what they need</li>

@@ -250,6 +250,42 @@ def test_7_8_graph_identifiability():
     print("  ✓ GRAPH IDENTIFIABILITY CONFIRMED — all 20 graphs pairwise unique")
 
 
+def test_7_9_hub_node_has_higher_centrality_impact():
+    print("\n[7.9] Hub node has higher behavioral impact than leaf...")
+    from deal_room.committee.causal_graph import (
+        compute_behavioral_signature,
+        get_betweenness_centrality,
+        sample_graph,
+    )
+
+    ratios = []
+    for seed in range(10):
+        g = sample_graph(
+            STANDARD_5,
+            STANDARD_H,
+            "conflicted",
+            np.random.default_rng(seed + 700),
+        )
+        centrality = {
+            node: get_betweenness_centrality(g, node)
+            for node in STANDARD_5
+        }
+        hub = max(centrality, key=centrality.get)
+        leaf = min(centrality, key=centrality.get)
+        hub_signature = compute_behavioral_signature(g, hub, belief_delta=0.5)
+        leaf_signature = compute_behavioral_signature(g, leaf, belief_delta=0.5)
+        hub_impact = sum(abs(value) for value in hub_signature.values())
+        leaf_impact = sum(abs(value) for value in leaf_signature.values())
+        ratios.append(hub_impact / max(leaf_impact, 1e-9))
+
+    mean_ratio = float(np.mean(ratios))
+    assert mean_ratio > 1.3, (
+        f"Hub nodes should have ≥30% more impact than leaves. "
+        f"Mean impact ratio={mean_ratio:.3f}, ratios={[round(r, 3) for r in ratios]}"
+    )
+    print(f"  ✓ Mean hub/leaf impact ratio = {mean_ratio:.3f}")
+
+
 def run_all():
     print("=" * 60)
     print("  DealRoom v3 — Causal Graph Unit Tests (Container)")
@@ -264,6 +300,7 @@ def run_all():
         test_7_6_exec_sponsor_outgoing_authority,
         test_7_7_hub_centrality_beats_leaf,
         test_7_8_graph_identifiability,
+        test_7_9_hub_node_has_higher_centrality_impact,
     ]
 
     failed = []

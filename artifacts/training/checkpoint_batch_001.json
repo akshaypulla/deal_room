@@ -1,0 +1,43 @@
+{
+  "batch_index": 1,
+  "model_id": "Qwen/Qwen2.5-3B-Instruct",
+  "policy_name": "heuristic",
+  "policy_state": {
+    "enable_lookahead": true,
+    "prefer_concessions": true
+  },
+  "metrics": {
+    "goal_reward": 0.6193259884636441,
+    "trust_reward": 0.7291043461850347,
+    "info_reward": 0.7182641637592363,
+    "risk_reward": 0.5,
+    "causal_reward": 0.04,
+    "lookahead_usage_rate": 0.0,
+    "prediction_accuracy": 0.0,
+    "total_reward": 0.10061039820953044,
+    "weighted_reward": 1.1006103982095303,
+    "episodes_completed": 2,
+    "task_mix": {
+      "conflicted": 0.5,
+      "hostile_acquisition": 0.5
+    },
+    "terminal_outcomes": {
+      "veto_by_Legal": 2
+    },
+    "checkpoint_path": null
+  },
+  "trajectories": [
+    {
+      "task_id": "hostile_acquisition",
+      "terminal_outcome": "veto_by_Legal",
+      "weighted_reward": 0.02755139966740594,
+      "seed": 2095133046
+    },
+    {
+      "task_id": "conflicted",
+      "terminal_outcome": "veto_by_Legal",
+      "weighted_reward": 0.17366939675165494,
+      "seed": 1497586439
+    }
+  ]
+}

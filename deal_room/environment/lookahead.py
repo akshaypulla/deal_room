@@ -7,7 +7,7 @@ from typing import Dict, List
 
 import numpy as np
 
-LOOKAHEAD_COST = 0.07
+from deal_room.rewards.utterance_scorer import LOOKAHEAD_COST
 
 
 @dataclass
@@ -138,13 +138,28 @@ class LookaheadSimulator:
         belief_delta = (response_score - base_response_score) * 0.5
 
         return SimOutput(
-            responses={
-                target_id: f"Simulated response at confidence {response_score:.2f}"
-            },
+            responses={target_id: self._predict_response_text(response_score, action_draft)},
             belief_deltas={target_id: belief_delta},
             cvar_impact={target_id: -abs(belief_delta) * 0.3},
             graph_info_gain=0.1 if action_draft.documents else 0.05,
             predicted_goal_delta=response_score,
+        )
+
+    def _predict_response_text(self, response_score: float, action_draft) -> str:
+        supportive_threshold = 0.50 if action_draft.documents else 0.60
+        if response_score > supportive_threshold:
+            return (
+                f"Thank you for the {'document' if action_draft.documents else 'message'}. "
+                "I can see the merit in this approach and will review accordingly."
+            )
+        if response_score > 0.4:
+            return (
+                "I appreciate the information. Let me consider the implications for "
+                "our evaluation before committing."
+            )
+        return (
+            "I have concerns about this direction. We need more detail before I can "
+            "support this proposal."
         )
 
     def _empty_result(self) -> SimulationResult:

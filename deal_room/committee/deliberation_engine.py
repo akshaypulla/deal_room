@@ -26,8 +26,12 @@ class DeliberationResult:
     propagation_deltas: Dict[str, float]
 
 
-def _minimax_call(prompt: str, max_tokens: int = 100, temperature: float = 0.8) -> str:
-    return generate_deliberation_summary(prompt=prompt, context="deliberation")
+def _minimax_call(
+    prompt: str, max_tokens: int = 220, temperature: float = 0.8, timeout: float = 5.0
+) -> str:
+    return generate_deliberation_summary(
+        prompt=prompt, context="deliberation", timeout=timeout
+    )
 
 
 class CommitteeDeliberationEngine:
@@ -79,50 +83,44 @@ class CommitteeDeliberationEngine:
         beliefs_after: Dict[str, BeliefDistribution],
         targeted_stakeholder: str,
     ) -> str:
-        deltas = {
-            sid: abs(
-                beliefs_after[sid].positive_mass() - beliefs_before[sid].positive_mass()
-            )
-            for sid in beliefs_after
-            if sid != targeted_stakeholder
-        }
-        if not deltas:
+        target_belief_before = beliefs_before.get(targeted_stakeholder)
+        target_belief_after = beliefs_after.get(targeted_stakeholder)
+        if target_belief_before is None or target_belief_after is None:
             return ""
 
-        top_two = sorted(deltas.keys(), key=lambda x: deltas[x], reverse=True)[:2]
-        if len(top_two) < 2:
+        pm_before = target_belief_before.positive_mass()
+        pm_after = target_belief_after.positive_mass()
+        pm_delta = pm_after - pm_before
+
+        confidence_before = getattr(target_belief_before, "confidence", 0.5)
+        confidence_after = getattr(target_belief_after, "confidence", 0.5)
+        conf_delta = confidence_after - confidence_before
+
+        other_deltas = {}
+        for sid, b_after in beliefs_after.items():
+            if sid == targeted_stakeholder:
+                continue
+            b_before = beliefs_before.get(sid)
+            if b_before is not None:
+                delta = b_after.positive_mass() - b_before.positive_mass()
+                if abs(delta) > 0.01:
+                    other_deltas[sid] = delta
+
+        prompt = (
+            f"Deliberation summary for deal room committee discussion:\n\n"
+            f"Targeted stakeholder: {targeted_stakeholder}\n"
+            f"Belief shift for targeted: positive mass {pm_before:.2f} -> {pm_after:.2f} (delta {pm_delta:+.2f})\n"
+            f"Confidence shift: {confidence_before:.2f} -> {confidence_after:.2f} (delta {conf_delta:+.2f})\n"
+        )
+        if other_deltas:
+            prompt += "Other stakeholder deltas:\n"
+            for sid, delta in sorted(other_deltas.items()):
+                prompt += f"  {sid}: {delta:+.2f}\n"
+        prompt += (
+            f"\nSummarize in 2-4 sentences how the committee's understanding evolved. "
+            f"Focus on the targeted stakeholder's changed perception and downstream effects."
+        )
+        try:
+            return _minimax_call(prompt, max_tokens=220, temperature=0.8, timeout=5.0)
+        except Exception:
             return ""
-
-        s1, s2 = top_two[0], top_two[1]
-        d1 = beliefs_after[s1].positive_mass() - beliefs_before[s1].positive_mass()
-        d2 = beliefs_after[s2].positive_mass() - beliefs_before[s2].positive_mass()
-
-        sentiment1 = (
-            "cautiously positive"
-            if d1 > 0.05
-            else ("concerned" if d1 < -0.05 else "neutral")
-        )
-        sentiment2 = (
-            "cautiously positive"
-            if d2 > 0.05
-            else ("concerned" if d2 < -0.05 else "neutral")
-        )
-
-        role_map = {
-            "Legal": "General Counsel / Legal",
-            "Finance": "CFO / Finance",
-            "TechLead": "CTO / Technical Lead",
-            "Procurement": "Head of Procurement",
-            "Operations": "VP Operations / COO",
-            "ExecSponsor": "CEO / Executive Sponsor",
-        }
-        r1 = role_map.get(s1, s1)
-        r2 = role_map.get(s2, s2)
-
-        prompt = f"""Two committee members briefly discuss the vendor after their latest communication.
-{s1} ({r1}) is currently {sentiment1} about the vendor.
-{s2} ({r2}) is currently {sentiment2} about the vendor.
-Write 2-3 turns of realistic internal discussion (no vendor present).
-Under 80 words total. Do not invent facts not stated."""
-
-        return _minimax_call(prompt, max_tokens=100, temperature=0.8)

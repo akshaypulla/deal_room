@@ -35,10 +35,12 @@ dev = [
 
 [project.scripts]
 # Server entry point - enables running via: uv run --project . server
-# or: python -m deal_room.server.app
-server = "deal_room.server.app:main"
+# or: python -m server.app
+server = "server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["deal_room", "deal_room.server"]
-package-dir = { "deal_room" = ".", "deal_room.server" = "server" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["deal_room*", "server*"]

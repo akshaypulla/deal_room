@@ -11,8 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
+from deal_room.environment.dealroom_v3 import STANDARD_STAKEHOLDERS
 from models import DealRoomAction
 from server.session_pool import DealRoomSessionPool, SESSION_COOKIE_NAME
+from server.validator import OutputValidator
 
 app = FastAPI(title="DealRoom", version="1.0.0")
 app.add_middleware(
@@ -20,6 +22,8 @@ app.add_middleware(
 )
 
 _sessions = DealRoomSessionPool()
+_validator = OutputValidator(mode="strict")
+_http_targets = [stakeholder_id.lower() for stakeholder_id in STANDARD_STAKEHOLDERS]
 
 
 def _web_shell_html() -> str:
@@ -83,6 +87,7 @@ async def web_shell_slash():
 
 class ResetRequest(BaseModel):
     task_id: Optional[str] = "aligned"
+    task: Optional[str] = None
     seed: Optional[int] = 42
     episode_id: Optional[str] = None
 
@@ -113,6 +118,22 @@ def _set_session_cookie(response: Response, session_id: str) -> None:
     )
 
 
+def _normalize_http_action(action: DealRoomAction) -> DealRoomAction:
+    normalized = _validator._normalize(action.model_dump(), _http_targets)
+    return action.model_copy(
+        update={
+            "action_type": normalized["action_type"],
+            "target": normalized["target"],
+            "target_ids": normalized["target_ids"],
+            "message": normalized["message"],
+            "documents": normalized["documents"],
+            "proposed_terms": normalized["proposed_terms"],
+            "channel": normalized["channel"],
+            "mode": normalized["mode"],
+        }
+    )
+
+
 @app.get("/health")
 async def health():
     return {
@@ -139,9 +160,10 @@ async def reset(
 ):
     try:
         session_id = _resolve_session_id(request, explicit_session_id=req.episode_id)
+        task_id = req.task_id or req.task or "aligned"
         session_id, obs, _state = _sessions.reset(
             seed=req.seed,
-            task_id=req.task_id or "aligned",
+            task_id=task_id,
             session_id=session_id,
         )
         obs.metadata["session_id"] = session_id
@@ -156,6 +178,7 @@ async def reset(
 @app.post("/step")
 async def step(request: Request, response: Response, action: DealRoomAction):
     try:
+        action = _normalize_http_action(action)
         session_id = _resolve_session_id(request, action=action)
         if not session_id or not _sessions.has_session(session_id):
             raise HTTPException(

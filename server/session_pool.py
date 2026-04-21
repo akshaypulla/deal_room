@@ -44,9 +44,7 @@ class DealRoomSessionPool:
         if _base not in sys.path:
             sys.path.insert(0, _base)
 
-        import deal_room.environment.dealroom_v3 as module
-
-        DealRoomV3 = module.DealRoomV3
+        from deal_room import DealRoomV3
 
         with self._lock:
             self._prune_locked()

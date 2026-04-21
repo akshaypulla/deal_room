@@ -1,40 +1,28 @@
 """
-DealRoom v3 — Dual-API LLM Client
+DealRoom v3 — MiniMax LLM Client.
 
-TWO APIs, each used where it wins:
-  GPT-4o-mini  → utterance scorer JSON (json_object mode = zero parse failures)
-  MiniMax      → stakeholder responses + deliberation summaries (natural language)
-
-Both APIs use the same error handling, retry logic, and interactive pause.
-Switch between testing (MiniMax token plan) and training (MiniMax API) by
-changing MINIMAX_API_KEY only. GPT-4o-mini is always via OPENAI_API_KEY.
-
-CORRECT max_tokens per call type:
-  scorer JSON:            60   (just {"goal":x,"trust":x,"info":x} = ~20 tokens)
-  stakeholder response:  200   (2-4 sentences = 40-80 tokens, 200 is headroom)
-  deliberation summary:  220   (2-3 turns < 80 words = ~110 tokens, 220 headroom)
-
-JSON 3-strike rule: if LLM returns invalid JSON 3 consecutive times,
-stop retrying silently and print the prompt so you can fix it.
+Single API: MiniMax M2.5 via curl, Anthropic-compatible /v1/messages endpoint.
+No fallback. No JSON scoring.
 """
 
 import os
 import sys
 import time
 import json
+import subprocess
 import threading
-import numpy as np
-from enum import Enum
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
 import atexit
 
+
 MAX_TOKENS = {
-    "scorer_json": 60,
     "stakeholder_response": 200,
     "deliberation_summary": 220,
 }
+INTERACTIVE_DEBUG_ENV = "DEALROOM_LLM_INTERACTIVE"
 
 
 class LLMErrorType(Enum):
@@ -50,7 +38,6 @@ class LLMErrorType(Enum):
     SERVER_500 = "server_500"
     SERVER_5XX = "server_5xx"
     SERVER_OVERLOADED = "server_overloaded"
-    INVALID_JSON = "invalid_json"
     EMPTY_RESPONSE = "empty_response"
     CONTENT_FILTER = "content_filter"
     UNKNOWN = "unknown"
@@ -189,33 +176,13 @@ def classify_error(
 
 def get_minimax_client() -> Tuple[Any, str]:
     key = os.environ.get("MINIMAX_API_KEY")
+    model = os.environ.get("MINIMAX_MODEL", "MiniMax-Text-01")
     if not key:
-        raise EnvironmentError(
-            "\n" + "=" * 60 + "\n"
-            "MINIMAX_API_KEY not set.\n"
-            "Required for stakeholder responses and deliberation summaries.\n"
-            "  export MINIMAX_API_KEY=your_key\n" + "=" * 60
-        )
+        return None, model
     from openai import OpenAI
 
     base_url = os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.chat/v1")
-    model = os.environ.get("MINIMAX_MODEL", "MiniMax-Text-01")
     return OpenAI(api_key=key, base_url=base_url), model
-
-
-def get_openai_client() -> Tuple[Any, str]:
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise EnvironmentError(
-            "\n" + "=" * 60 + "\n"
-            "OPENAI_API_KEY not set.\n"
-            "Required for utterance scorer (JSON scoring).\n"
-            "  export OPENAI_API_KEY=your_key\n" + "=" * 60
-        )
-    from openai import OpenAI
-
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-    return OpenAI(api_key=key), model
 
 
 @dataclass
@@ -227,7 +194,6 @@ class RetryPolicy:
     jitter_fraction: float = 0.2
     rate_limit_default_wait: float = 60.0
     rate_limit_max_wait: float = 300.0
-    json_strike_limit: int = 3
 
     def compute_backoff(self, attempt: int) -> float:
         import random
@@ -243,18 +209,15 @@ DEFAULT_POLICY = RetryPolicy()
 
 class LLMCallStats:
     def __init__(self):
-        self.calls: Dict[str, int] = {"minimax": 0, "openai": 0}
-        self.successes: Dict[str, int] = {"minimax": 0, "openai": 0}
+        self.calls: Dict[str, int] = {"minimax": 0}
+        self.successes: Dict[str, int] = {"minimax": 0}
         self.auto_retried: int = 0
         self.interventions: int = 0
         self.skipped: int = 0
-        self.json_strikes: int = 0
         self.errors: Dict[LLMErrorType, int] = {}
         self._lock = threading.Lock()
 
-    def record(
-        self, api, success=False, retry=False, skip=False, error=None, json_strike=False
-    ):
+    def record(self, api, success=False, retry=False, skip=False, error=None):
         with self._lock:
             self.calls[api] = self.calls.get(api, 0) + 1
             if success:
@@ -263,8 +226,6 @@ class LLMCallStats:
                 self.auto_retried += 1
             if skip:
                 self.skipped += 1
-            if json_strike:
-                self.json_strikes += 1
             if error:
                 self.errors[error] = self.errors.get(error, 0) + 1
 
@@ -279,7 +240,6 @@ class LLMCallStats:
         total = sum(self.calls.values())
         succ = sum(self.successes.values())
         print(f"  MiniMax calls:       {self.calls.get('minimax', 0):>4}")
-        print(f"  OpenAI calls:        {self.calls.get('openai', 0):>4}")
         print(f"  Total:               {total:>4}   (success: {succ})")
         if self.auto_retried:
             print(f"  Auto-retried:        {self.auto_retried:>4}")
@@ -287,8 +247,6 @@ class LLMCallStats:
             print(f"  User interventions:  {self.interventions:>4}")
         if self.skipped:
             print(f"  Skipped:             {self.skipped:>4}")
-        if self.json_strikes:
-            print(f"  JSON 3-strikes:      {self.json_strikes:>4}")
         if self.errors:
             print(f"  Errors:")
             for et, n in sorted(self.errors.items(), key=lambda x: -x[1]):
@@ -323,12 +281,11 @@ def _interactive_pause(error: LLMError, context: str, allow_skip: bool = True) -
     print(f"{'─' * 62}")
 
     if error.is_auth_error():
-        api_name = "MINIMAX_API_KEY" if error.api == "minimax" else "OPENAI_API_KEY"
         print(
             f"{YELLOW}  Authentication failed. Fix your API key, then press c.{RESET}"
         )
-        print(f"  Current: {_get_key_source(api_name)}")
-        print(f"  Fix:     export {api_name}=your_new_key\n")
+        print(f"  Current: {_get_key_source('MINIMAX_API_KEY')}")
+        print(f"  Fix:     export MINIMAX_API_KEY=your_new_key\n")
     elif error.is_rate_limit():
         print(f"{YELLOW}  Rate/quota limit hit.{RESET}")
         if error.retry_after:
@@ -443,21 +400,74 @@ def llm_call_text(
     context: str = "",
     allow_skip: bool = False,
     policy: RetryPolicy = DEFAULT_POLICY,
+    timeout: float = 30.0,
 ) -> Optional[str]:
-    max_tokens = MAX_TOKENS[call_type]
+    if not os.environ.get("MINIMAX_API_KEY"):
+        STATS.record("minimax", skip=True)
+        return None
+
+    max_tokens_val = MAX_TOKENS[call_type]
     attempt = 0
+    interactive = os.environ.get(INTERACTIVE_DEBUG_ENV, "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
     while True:
-        client, model = get_minimax_client()
+        key = os.environ.get("MINIMAX_API_KEY", "")
+        base_url = os.environ.get(
+            "MINIMAX_BASE_URL", "https://api.minimax.io/anthropic/v1"
+        )
+        model = os.environ.get("MINIMAX_MODEL", "MiniMax-M2.5")
+
         STATS.record("minimax")
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=temperature,
+            payload = json.dumps(
+                {
+                    "model": model,
+                    "max_tokens": max_tokens_val,
+                    "temperature": temperature,
+                    "messages": [{"role": "user", "content": prompt}],
+                }
             )
-            text = resp.choices[0].message.content
+            result = subprocess.run(
+                [
+                    "curl",
+                    "-s",
+                    "-X",
+                    "POST",
+                    f"{base_url}/messages",
+                    "-H",
+                    f"Authorization: Bearer {key}",
+                    "-H",
+                    "Content-Type: application/json",
+                    "-H",
+                    "anthropic-version: 2023-06-01",
+                    "-d",
+                    payload,
+                    "--max-time",
+                    str(int(timeout)),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=int(timeout) + 5,
+            )
+
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                if any(k in stderr for k in ["timeout", "timed out"]):
+                    raise TimeoutError(f"curl timed out: {stderr}")
+                raise RuntimeError(f"curl failed (rc={result.returncode}): {stderr}")
+
+            data = json.loads(result.stdout)
+            content_blocks = data.get("content", [])
+            text_parts = []
+            for block in content_blocks:
+                if block.get("type") == "text" and block.get("text", "").strip():
+                    text_parts.append(block["text"])
+            text = " ".join(text_parts) if text_parts else ""
+
             if not text or not text.strip():
                 raise ValueError("Empty response")
             STATS.record("minimax", success=True)
@@ -481,6 +491,9 @@ def llm_call_text(
             STATS.record("minimax", error=err.error_type)
 
             if err.is_auth_error():
+                if not interactive:
+                    STATS.record("minimax", skip=True)
+                    return None
                 action = _interactive_pause(err, context, allow_skip)
                 STATS.record_intervention()
                 if action == "skip":
@@ -490,6 +503,9 @@ def llm_call_text(
 
             if err.is_rate_limit():
                 if err.error_type == LLMErrorType.QUOTA_EXCEEDED:
+                    if not interactive:
+                        STATS.record("minimax", skip=True)
+                        return None
                     action = _interactive_pause(err, context, allow_skip)
                     STATS.record_intervention()
                     if action == "skip":
@@ -516,167 +532,17 @@ def llm_call_text(
                 attempt += 1
                 continue
 
+            if not interactive:
+                STATS.record("minimax", skip=True)
+                return None
+
             action = _interactive_pause(err, context, allow_skip)
             STATS.record_intervention()
             if action == "skip":
                 STATS.record("minimax", skip=True)
                 return None
             attempt = 0
-
-
-_json_strike_counts: Dict[str, int] = {}
-_json_strike_lock = threading.Lock()
-
-
-def _increment_json_strike(context_key: str) -> int:
-    with _json_strike_lock:
-        _json_strike_counts[context_key] = _json_strike_counts.get(context_key, 0) + 1
-        return _json_strike_counts[context_key]
-
-
-def _reset_json_strike(context_key: str):
-    with _json_strike_lock:
-        _json_strike_counts[context_key] = 0
-
-
-def _handle_json_3_strikes(prompt: str, context: str, raw_response: str):
-    print(f"\n{'=' * 62}")
-    print(f"{RED}{BOLD}  JSON 3-STRIKE LIMIT — PROMPT NEEDS FIXING{RESET}")
-    print(f"{'=' * 62}")
-    print(f"  Context: {context}")
-    print(f"  The scorer returned invalid JSON 3 times in a row.")
-    print(f"  This means the prompt is producing non-JSON output.")
-    print(f"\n{YELLOW}  ── PROMPT ─────────────────────────────────────────────{RESET}")
-    print(f"{DIM}{prompt[:800]}{'...' if len(prompt) > 800 else ''}{RESET}")
-    print(f"\n{YELLOW}  ── LAST RESPONSE ──────────────────────────────────────{RESET}")
-    print(f"{DIM}{raw_response[:400]}{'...' if len(raw_response) > 400 else ''}{RESET}")
-    print(f"\n{CYAN}  Fix the prompt, then press c to retry, or e to exit.{RESET}")
-    print(f"  Options: {GREEN}c{RESET} (continue/retry)  |  {GREEN}e{RESET} (exit)")
-    print(f"{'─' * 62}")
-
-    while True:
-        try:
-            choice = input(f"  {BOLD}Your choice: {RESET}").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            sys.exit(1)
-        if choice in ("c", "continue", "r", "retry"):
-            print(f"  {GREEN}Retrying with same prompt...{RESET}\n")
-            _reset_json_strike(context)
-            STATS.json_strikes += 1
-            return
-        if choice in ("e", "exit", "q", "quit"):
-            print(f"  {RED}Exiting.{RESET}")
-            sys.exit(0)
-        print(f"  Enter c or e.")
-
-
-def llm_call_json(
-    prompt: str,
-    expected_keys: list,
-    default_values: dict,
-    context: str = "",
-    policy: RetryPolicy = DEFAULT_POLICY,
-) -> dict:
-    max_tokens = MAX_TOKENS["scorer_json"]
-    attempt = 0
-    last_raw = ""
-    context_key = context or "scorer"
-
-    while True:
-        client, model = get_openai_client()
-        STATS.record("openai")
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=0.1,
-                response_format={"type": "json_object"},
-            )
-            raw = resp.choices[0].message.content
-            if not raw or not raw.strip():
-                raise ValueError("Empty response")
-
-            last_raw = raw
-            clean = _strip_json_fences(raw)
-            parsed = json.loads(clean)
-
-            result = {
-                k: float(np.clip(parsed.get(k, default_values.get(k, 0.5)), 0.0, 1.0))
-                for k in expected_keys
-            }
-            STATS.record("openai", success=True)
-            _reset_json_strike(context_key)
-            return result
-
-        except (json.JSONDecodeError, ValueError, TypeError) as json_err:
-            STATS.record("openai", error=LLMErrorType.INVALID_JSON)
-            strikes = _increment_json_strike(context_key)
-            print(
-                f"  {YELLOW}[openai/scorer] JSON parse failure "
-                f"(strike {strikes}/{policy.json_strike_limit}): {json_err}{RESET}",
-                flush=True,
-            )
-
-            if strikes >= policy.json_strike_limit:
-                _handle_json_3_strikes(prompt, context, last_raw)
-                attempt = 0
-                continue
-
-            time.sleep(0.5)
-            attempt += 1
             continue
-
-        except Exception as raw_exc:
-            sc = getattr(raw_exc, "status_code", None)
-            if (
-                sc is None
-                and hasattr(raw_exc, "response")
-                and raw_exc.response is not None
-            ):
-                sc = raw_exc.response.status_code
-            err = classify_error(raw_exc, sc, api="openai")
-
-            print(
-                f"{DIM}  [{datetime.now().strftime('%H:%M:%S')}] "
-                f"[openai/scorer] {err.error_type.value}{RESET}",
-                flush=True,
-            )
-            STATS.record("openai", error=err.error_type)
-
-            if err.is_auth_error():
-                action = _interactive_pause(err, context, allow_skip=False)
-                STATS.record_intervention()
-                continue
-
-            if err.is_rate_limit():
-                if err.error_type == LLMErrorType.QUOTA_EXCEEDED:
-                    action = _interactive_pause(err, context, allow_skip=False)
-                    STATS.record_intervention()
-                    continue
-                wait = min(
-                    err.retry_after or policy.rate_limit_default_wait,
-                    policy.rate_limit_max_wait,
-                )
-                _print_rate_wait(wait, context, "openai")
-                _countdown_sleep(wait)
-                STATS.record("openai", retry=True)
-                attempt += 1
-                continue
-
-            if err.is_auto_recoverable() and attempt < policy.max_auto_retries:
-                backoff = policy.compute_backoff(attempt)
-                _print_auto_retry(
-                    err, context, attempt, backoff, policy.max_auto_retries
-                )
-                time.sleep(backoff)
-                STATS.record("openai", retry=True)
-                attempt += 1
-                continue
-
-            action = _interactive_pause(err, context, allow_skip=False)
-            STATS.record_intervention()
-            attempt = 0
 
 
 def generate_stakeholder_response(prompt: str, context: str = "") -> Optional[str]:
@@ -689,78 +555,41 @@ def generate_stakeholder_response(prompt: str, context: str = "") -> Optional[st
     )
 
 
-def generate_deliberation_summary(prompt: str, context: str = "") -> str:
+def generate_deliberation_summary(
+    prompt: str, context: str = "", timeout: float = 5.0
+) -> str:
     result = llm_call_text(
         prompt=prompt,
         call_type="deliberation_summary",
         temperature=0.8,
         context=context or "deliberation_summary",
         allow_skip=True,
+        timeout=timeout,
     )
     return result or ""
 
 
-def score_utterance_dimensions(
-    scoring_prompt: str,
-    context: str = "",
-) -> dict:
-    return llm_call_json(
-        prompt=scoring_prompt,
-        expected_keys=["goal", "trust", "info"],
-        default_values={"goal": 0.40, "trust": 0.50, "info": 0.40},
-        context=context or "utterance_scorer",
-    )
-
-
 def validate_api_keys():
-    errors = []
-
-    if not os.environ.get("MINIMAX_API_KEY"):
-        errors.append(
-            "MINIMAX_API_KEY missing.\n"
-            "  Used for: stakeholder responses, deliberation summaries.\n"
-            "  Set: export MINIMAX_API_KEY=your_key"
-        )
-
-    if not os.environ.get("OPENAI_API_KEY"):
-        errors.append(
-            "OPENAI_API_KEY missing.\n"
-            "  Used for: utterance scoring (GPT-4o-mini json_object mode).\n"
-            "  Set: export OPENAI_API_KEY=your_key"
-        )
-
-    if errors:
-        raise EnvironmentError(
-            "\n\n" + "=" * 62 + "\n"
-            "DealRoom v3 — Missing API Keys\n"
-            + "─" * 62
-            + "\n"
-            + "\n".join(f"  {i + 1}. {e}" for i, e in enumerate(errors))
-            + "\n"
-            + "=" * 62
-        )
+    return bool(os.environ.get("MINIMAX_API_KEY"))
 
 
 USAGE = """
 DealRoom v3 — API Configuration
 
-TESTING (April 20, MiniMax token plan + OpenAI):
-  export MINIMAX_API_KEY=your_minimax_key
-  export OPENAI_API_KEY=your_openai_key
+API:   MiniMax M2.5
 
-TRAINING AT HACKATHON (April 25-26, HF credits for GPU, same API keys):
-  Same keys as above — no change needed.
+REQUIRED:
+  export MINIMAX_API_KEY=your_minimax_key
 
 OPTIONAL OVERRIDES:
-  export MINIMAX_BASE_URL=https://api.minimax.chat/v1  (default)
-  export MINIMAX_MODEL=MiniMax-Text-01                 (default)
-  export OPENAI_MODEL=gpt-4o-mini                      (default)
+  export MINIMAX_BASE_URL=https://api.minimax.io/anthropic/v1  (default)
+  export MINIMAX_MODEL=MiniMax-M2.5                           (default)
 
 CALL ROUTING:
-  score_utterance_dimensions()   → GPT-4o-mini (json_object mode)
-  generate_stakeholder_response() → MiniMax    (natural language)
-  generate_deliberation_summary() → MiniMax    (natural language)
+  generate_stakeholder_response() -> MiniMax (text output)
+  generate_deliberation_summary() -> MiniMax (text output)
 """
+
 
 if __name__ == "__main__":
     print(USAGE)

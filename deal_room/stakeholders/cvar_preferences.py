@@ -16,6 +16,7 @@ class StakeholderRiskProfile:
     alpha: float
     tau: float
     lambda_risk: float
+    veto_power: bool = False
     utility_weights: Dict[str, float] = field(default_factory=dict)
     uncertainty_domains: List[str] = field(default_factory=list)
 

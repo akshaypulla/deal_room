@@ -19,6 +19,7 @@ def _init_archetypes() -> Dict[str, StakeholderRiskProfile]:
             alpha=0.95,
             tau=0.10,
             lambda_risk=0.70,
+            veto_power=True,
             utility_weights={
                 "compliance_coverage": 0.40,
                 "liability_limitation": 0.30,
@@ -37,6 +38,7 @@ def _init_archetypes() -> Dict[str, StakeholderRiskProfile]:
             alpha=0.90,
             tau=0.15,
             lambda_risk=0.50,
+            veto_power=True,
             utility_weights={
                 "roi_clarity": 0.35,
                 "payment_terms": 0.25,
@@ -109,6 +111,7 @@ def _init_archetypes() -> Dict[str, StakeholderRiskProfile]:
             alpha=0.70,
             tau=0.40,
             lambda_risk=0.25,
+            veto_power=True,
             utility_weights={
                 "strategic_alignment": 0.40,
                 "organizational_consensus": 0.30,

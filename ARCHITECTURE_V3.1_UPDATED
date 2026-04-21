@@ -1,0 +1,503 @@
+# DealRoom v3 — Architecture (Updated)
+
+> **Document status:** Reflects implemented state plus four required fixes.
+> Working sections describe exactly what is built. Fix sections specify
+> exactly what needs to change. Do not modify working sections.
+
+---
+
+## Overview
+
+DealRoom v3 is a multi-stakeholder enterprise negotiation RL environment.
+A vendor agent negotiates with a committee of 6 stakeholders (Legal, Finance,
+TechLead, Procurement, Operations, ExecSponsor) across three scenario types:
+`aligned`, `conflicted`, `hostile_acquisition`.
+
+OpenEnv-compatible: `reset()` → observation, `step(action)` → observation +
+reward + done + info. FastAPI HTTP server. Pure-Python deterministic reward.
+MiniMax-only LLM for natural language generation (not scoring).
+
+---
+
+## Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| 18-field observation schema | ✅ Working | All fields present, hidden state excluded |
+| 5D pure-Python reward scorer | ✅ Working | Deterministic, no LLM, no cache |
+| Causal graph G (hidden) | ✅ Working | Never in observation |
+| Bayesian belief updates | ✅ Working | Inline in `_bayesian_update()` |
+| Belief propagation + damping | ✅ Working | `propagate_beliefs()` damping=0.85 |
+| Lookahead cost deduction | ✅ Working | Exactly 0.07 from goal |
+| Engagement noise σ=0.03 | ✅ Working | Non-cancellable accumulation |
+| Cross-stakeholder echoes 70% | ✅ Working | Probabilistic recall |
+| Weak signals | ✅ Working | Hard=0.12, soft=0.08 |
+| CVaR precursors at 70% tau | ✅ Working | Surfaced in observation |
+| Episode reset / isolation | ✅ Working | Different seeds → different G |
+| MiniMax LLM client | ✅ Working | Retry, interactive pause, stats |
+| FastAPI /reset /step /state | ✅ Working | All endpoints respond |
+| Session pool | ✅ Working | 128 sessions, 6h TTL, thread-safe |
+| **CVaR veto termination** | ❌ NOT WIRED | `done` only set at max_rounds |
+| **stakeholder_messages** | ❌ ALWAYS EMPTY | `{}` returned, responses in info only |
+| **API key at instantiation** | ⚠️ DESIGN ISSUE | Blocks unit tests without key |
+| **LookaheadSimulator** | ❌ NOT INTEGRATED | Cost deducted, sim not run |
+| **belief_tracker.py** | ❌ DEAD CODE | Not called by environment |
+| GRPOTrainer model integration | ⚠️ SKELETAL | Random policy, no real model |
+| AdaptiveCurriculumGenerator | ⚠️ STANDALONE | Not called during training |
+
+---
+
+## Module Breakdown
+
+---
+
+### `deal_room/committee/causal_graph.py` — ✅ Working
+
+Defines `CausalGraph` and `BeliefDistribution`. Hidden world state — never in observation.
+
+**Key constants:**
+```python
+VENDOR_TYPES = ["competent","incompetent","trustworthy","deceptive","aligned","misaligned"]
+
+SCENARIO_PARAMS = {
+    "aligned":             {"base_p":0.30,"intra":0.40,"cross":-0.20,"auth_p":0.85,
+                            "w_mu":0.45,"w_sd":0.15},
+    "conflicted":          {"base_p":0.45,"intra":0.50,"cross":-0.15,"auth_p":0.80,
+                            "w_mu":0.50,"w_sd":0.18},
+    "hostile_acquisition": {"base_p":0.60,"intra":0.25,"cross":-0.05,"auth_p":0.65,
+                            "w_mu":0.45,"w_sd":0.25},
+}
+
+FUNCTIONAL_CLUSTERS = {
+    "cost":  ["Finance","Procurement"],
+    "risk":  ["Legal","Compliance"],
+    "impl":  ["TechLead","Operations"],
+    "auth":  ["ExecSponsor"],
+}
+```
+
+**`sample_graph()`** — samples G at episode reset. Authority nodes (≥4) always
+get outgoing edges at `auth_p`. Same-cluster pairs get `intra` boost. Cross-cluster
+gets `cross` penalty. No self-loops. Weights clipped to [0.05, 0.95].
+
+**Invariant:** ExecSponsor always has ≥ 2 outgoing edges across all scenarios and seeds.
+
+**`BeliefDistribution`** dataclass — 6-type probability distribution summing to 1.0.
+`positive_mass()` = competent + trustworthy + aligned.
+
+**`propagate_beliefs(graph, beliefs_before, beliefs_after_action, n_steps=3)`**:
+```
+For each step in range(n_steps):
+  For each dest node i:
+    total_delta = Σ w_ji * (current[src].positive_mass() - before[src].positive_mass())
+    if |total_delta| > 0.005:
+      apply delta with damping = 0.85^step
+      renormalize
+```
+
+**`get_betweenness_centrality(graph)`** — BFS-based, edge weights as path costs
+`1/(w+0.01)`. Normalized.
+
+**`compute_behavioral_signature()`** — simulates one targeted intervention,
+returns `{sid: engagement_delta}` for non-targeted nodes. Used for identifiability.
+
+All 8 unit tests passing (test_07).
+
+---
+
+### `deal_room/committee/belief_tracker.py` — ❌ DEAD CODE
+
+Defines `bayesian_update()` and `ACTION_LIKELIHOODS` but `DealRoomV3` never
+imports or calls this module. The environment uses inline `_bayesian_update()`
+in `dealroom_v3.py` with its own likelihood table.
+
+**Decision:** Do not delete — it contains a richer likelihood table suitable for
+a future refactor. Do not add tests for it — it does not run during environment
+operation. Document as dead code.
+
+---
+
+### `deal_room/committee/deliberation_engine.py` — ✅ Working
+
+**Two-layer architecture — correctly implemented:**
+
+```
+Layer 1 — pure Python, zero LLM:
+  propagate_beliefs() → updates B_i(t+Δ)
+  Microsecond. Drives all rewards and observation signals.
+  If this breaks: training is broken.
+
+Layer 2 — one MiniMax call, 5s timeout:
+  _generate_summary() → 2-3 turn committee dialogue
+  Display-only. Demo visualization only.
+  Returns "" on any failure including timeout.
+  If this breaks: training is unaffected.
+```
+
+`run()` calls Layer 1 always, then Layer 2 if `render_summary=True`.
+
+`_generate_summary()`:
+- Finds 2 non-targeted stakeholders with largest `|positive_mass_delta|`
+- Returns `""` if max delta < 0.03 (no meaningful movement)
+- Calls `_minimax_call(prompt, max_tokens=220, temperature=0.8, timeout=5.0)`
+- Try/except returns `""` on any failure
+
+N steps: `{"aligned": 3, "conflicted": 3, "hostile_acquisition": 4}`.
+
+---
+
+### `deal_room/environment/dealroom_v3.py` — Working Except Two Fixes
+
+**Working correctly:**
+
+```python
+REWARD_WEIGHTS = {"goal":0.25, "trust":0.20, "info":0.20, "risk":0.20, "causal":0.15}
+
+OBS_CONFIG = ObservationConfig(
+    noise_sigma=0.03,
+    echo_recall_probability=0.70,
+    weak_signal_hard_threshold=0.12,
+    weak_signal_soft_lower=0.08,
+    engagement_history_window=5,
+)
+```
+
+**`reset()`** — working. Reseeds RNG, samples fresh G, sets scenario-specific
+initial beliefs, initializes noisy engagement accumulators and 5-entry history windows.
+
+**`step()` pipeline — working except Fix #1 and Fix #2:**
+1. `lookahead_was_requested = (hasattr(action,'lookahead') and action.lookahead is not None)` — first line ✅
+2. `state_before = StateSnapshot(self._state)` — captured before mutations ✅
+3. `_bayesian_update()` per stakeholder (targeted damping=1.0, non-targeted damping=0.3) ✅
+4. `CommitteeDeliberationEngine.run()` — Layer 1 propagation + Layer 2 summary ✅
+5. `_update_noisy_engagement()` — noisy delta accumulation, sliding window ✅
+6. `_generate_stakeholder_responses()` — MiniMax responses returned from step ✅
+7. `_compute_reward(action, state_before, lookahead_was_requested)` — weighted sum ✅
+8. `done = round_number >= max_rounds` — ❌ **MISSING CVaR VETO CHECK (Fix #1)**
+9. `_build_observation()` — ❌ **MISSING stakeholder_messages (Fix #2)**
+
+**`_compute_reward()` — working:**
+```python
+def _compute_reward(self, action, state_before, lookahead_used) -> float:
+    score = self._scorer.score(action, state_before, self._state,
+                                self._graph, lookahead_used)
+    return score.weighted_sum(REWARD_WEIGHTS)   # weighted, not /5.0
+```
+
+---
+
+#### FIX #1 (Critical) — Wire CVaR Veto to Episode Termination
+
+**Why critical:** Veto precursors surface correctly but veto never ends the episode.
+The RL agent has no terminal consequence to learn from. Episodes always end at
+`max_rounds`. The core research claim is computed but not trainable.
+
+**Add `_check_veto_termination()` to `dealroom_v3.py`:**
+
+```python
+def _check_veto_termination(self) -> bool:
+    """
+    Returns True if any veto-power stakeholder's CVaR loss exceeds their tau.
+    Called at end of every step() AFTER deliberation has updated beliefs.
+    Only stakeholders with veto_power=True can trigger termination.
+    """
+    from deal_room.stakeholders.cvar_preferences import compute_cvar_for_stakeholder
+    from deal_room.stakeholders.archetypes import ARCHETYPES
+
+    for sid, profile in self._state.risk_profiles.items():
+        if not getattr(profile, 'veto_power', False):
+            continue
+
+        belief = self._state.beliefs.get(sid)
+        terms  = getattr(self._state, 'current_terms', None)
+        if belief is None or terms is None:
+            continue
+
+        try:
+            cvar_loss = compute_cvar_for_stakeholder(terms, belief, profile)
+            if cvar_loss > profile.tau:
+                self._state.terminal_outcome = "veto"
+                self._state.veto_stakeholder = sid
+                return True
+        except Exception:
+            continue
+
+    return False
+```
+
+**Update `done` logic in `step()`:**
+
+```python
+# BEFORE (line ~519 in current file):
+done = (self._state.round_number >= self._state.max_rounds)
+
+# AFTER:
+veto_fired = self._check_veto_termination()
+done = (self._state.round_number >= self._state.max_rounds) or veto_fired
+
+if veto_fired:
+    self._state.terminal_outcome = "veto"
+    # Apply terminal reward penalty
+    from deal_room.environment.constants import TERMINAL_REWARDS, TERMINAL_WEIGHT
+    terminal_penalty = TERMINAL_WEIGHT * TERMINAL_REWARDS["veto"]
+    reward = float(np.clip(reward + terminal_penalty, -2.0, 2.0))
+```
+
+**Update `info` dict returned from `step()`:**
+```python
+info["terminal_outcome"] = getattr(self._state, 'terminal_outcome', 'in_progress')
+info["veto_stakeholder"] = getattr(self._state, 'veto_stakeholder', None)
+```
+
+---
+
+#### FIX #2 (High) — Populate stakeholder_messages in Observation
+
+**Why important:** The agent cannot read stakeholder responses. `stakeholder_messages`
+is always `{}` in the observation. Responses exist (generated by `_generate_stakeholder_responses()`)
+but are returned only in `info`, not the observation the agent uses.
+
+**Update `step()` to pass responses into `_build_observation()`:**
+
+```python
+# In step(), find this pattern:
+responses = self._generate_stakeholder_responses(action)
+# responses is already computed — it just isn't passed to _build_observation
+
+# Change _build_observation call from:
+obs = self._build_observation(vendor_action=action)
+
+# To:
+obs = self._build_observation(vendor_action=action, stakeholder_responses=responses)
+```
+
+**Update `_build_observation()` signature and body:**
+
+```python
+def _build_observation(self, vendor_action=None,
+                        stakeholder_responses=None,
+                        is_reset=False) -> DealRoomObservation:
+    # ... all existing logic unchanged ...
+
+    # Replace:
+    stakeholder_messages = {}   # currently always empty
+
+    # With:
+    stakeholder_messages = stakeholder_responses or {}
+```
+
+No other changes needed. The responses dict is already in the right format
+(`{sid: str}` or `{sid: {"response": str, ...}}`).
+
+---
+
+### `deal_room/environment/lookahead.py` — ❌ Not Integrated
+
+`LookaheadSimulator.simulate()` is fully implemented. Generates optimistic
+(+0.15 shift) and pessimistic (-0.15 shift) belief hypotheses, simulates
+`depth=2` full vendor turns under each, returns worst-case `SimulationResult`.
+
+Not called from `step()`. The 0.07 cost is deducted correctly. The simulation
+output (predicted belief deltas, CVaR impact) is unused.
+
+**FIX #3 (Medium) — Wire LookaheadSimulator into step():**
+
+```python
+# In step(), after state_before snapshot, before _bayesian_update():
+simulation_result = None
+if lookahead_was_requested:
+    try:
+        from deal_room.environment.lookahead import LookaheadSimulator
+        sim = LookaheadSimulator(self)
+        simulation_result = sim.simulate(
+            action_draft=action,
+            current_state=self._state,
+            n_hypotheses=action.lookahead.n_hypotheses if action.lookahead else 2,
+            depth=action.lookahead.depth if action.lookahead else 2,
+        )
+    except Exception:
+        simulation_result = None   # never blocks step()
+
+# Later, in info dict:
+if simulation_result:
+    info["lookahead_predicted_deltas"] = simulation_result.predicted_belief_deltas
+    info["lookahead_cvar_impact"] = simulation_result.cvar_impact
+    # prediction_accuracy logged as diagnostic — NEVER added to reward
+```
+
+Lower priority than Fix #1 and Fix #2.
+
+---
+
+### `deal_room/environment/llm_client.py` — ✅ Working
+
+Single API: MiniMax only. `MAX_TOKENS = {"stakeholder_response": 200, "deliberation_summary": 220}`.
+
+**FIX #4 (Medium) — Lazy API Key Validation**
+
+Current: `validate_api_keys()` called in `__init__()` raises `EnvironmentError`
+if `MINIMAX_API_KEY` missing. Blocks all container unit tests that import `DealRoomV3`
+without a key.
+
+```python
+# CURRENT (dealroom_v3.py __init__):
+def __init__(self):
+    validate_api_keys()    # blocks unit tests
+
+# REQUIRED:
+def __init__(self):
+    self._llm_validated = False   # defer validation
+
+def _ensure_llm_available(self):
+    """Called before any MiniMax call. Validates once."""
+    if not self._llm_validated:
+        from deal_room.environment.llm_client import validate_api_keys
+        validate_api_keys()
+        self._llm_validated = True
+```
+
+Call `self._ensure_llm_available()` at the start of:
+- `_generate_stakeholder_responses()`
+- Before `CommitteeDeliberationEngine.run()` with `render_summary=True`
+
+Pure Python paths (`_bayesian_update()`, `propagate_beliefs()`, `_compute_reward()`,
+`_build_observation()`) never call `_ensure_llm_available()` — they work without any API key.
+
+---
+
+### `deal_room/environment/constants.py` — NEW FILE REQUIRED
+
+Single source of truth for all training constants. Create this file.
+
+```python
+# deal_room/environment/constants.py
+
+REWARD_WEIGHTS = {
+    "goal":   0.25,
+    "trust":  0.20,
+    "info":   0.20,
+    "risk":   0.20,
+    "causal": 0.15,
+}
+
+TERMINAL_WEIGHT = 2.0
+
+TERMINAL_REWARDS = {
+    "pareto_optimal_close":  +1.0,
+    "suboptimal_close":       0.0,
+    "timeout":               -0.5,
+    "veto":                  -1.0,
+    "infeasible_terms":      -0.75,
+}
+
+VETO_WARNING_RATIO = 0.70   # CVaR/tau at which precursor fires
+```
+
+After creating this file, update imports:
+- `dealroom_v3.py`: `from deal_room.environment.constants import REWARD_WEIGHTS, TERMINAL_REWARDS, TERMINAL_WEIGHT`
+- `grpo_trainer.py`: `from deal_room.environment.constants import REWARD_WEIGHTS`
+
+`LOOKAHEAD_COST = 0.07` stays in `utterance_scorer.py` as its authoritative definition.
+`grpo_trainer.py` imports it from there:
+```python
+from deal_room.rewards.utterance_scorer import LOOKAHEAD_COST
+```
+
+**Verify single source of truth:**
+```bash
+grep -rn "REWARD_WEIGHTS\s*=" deal_room/ tests/
+# Should show: one definition in constants.py only
+grep -rn "LOOKAHEAD_COST\s*=" deal_room/ tests/
+# Should show: one definition in utterance_scorer.py only
+```
+
+---
+
+### `deal_room/rewards/utterance_scorer.py` — ✅ Working
+
+Pure Python. Zero LLM. Zero cache. All 13 unit tests passing.
+
+```python
+LOOKAHEAD_COST = 0.07   # single definition — all other files import from here
+LOG2_6 = np.log2(6)
+```
+
+Five dimension formulas (all computed from `StateSnapshot` delta):
+
+| Dim | Formula | Center |
+|-----|---------|--------|
+| goal | `0.50×approval_Δ + 0.30×blocker_Δ + 0.20×veto_headroom_Δ` | 0.5 |
+| trust | `0.6×positive_mass_Δ + 0.4×trustworthy_mass_Δ` for targeted | 0.5 |
+| info | `mean(H_before_i − H_after_i) / LOG2_6` over all stakeholders | 0.5 |
+| risk | `mean((CVaR_before − CVaR_after) / CVaR_before)` for λ>0.30 | 0.5 |
+| causal | `betweenness_centrality(target, G) / max_centrality(G)` | 0–1 |
+
+Lookahead: `if lookahead_used or action.lookahead is not None: goal = max(0, goal - 0.07)`.
+
+Aggregation: `score.weighted_sum(REWARD_WEIGHTS)` — weighted, not `/5.0`.
+
+---
+
+### `deal_room/stakeholders/` — ✅ Working
+
+Six archetypes with `veto_power` flag:
+
+| Role | tau | lambda | veto_power |
+|------|-----|--------|------------|
+| Legal | 0.10 | 0.70 | **True** |
+| Finance | 0.15 | 0.50 | **True** |
+| TechLead | 0.25 | 0.30 | False |
+| Procurement | 0.20 | 0.45 | False |
+| Operations | 0.30 | 0.35 | False |
+| ExecSponsor | 0.40 | 0.25 | **True** |
+
+Core research claim verified: Legal + no DPA → EU > 0 but CVaR > 0.10 = tau.
+All 6 CVaR unit tests passing.
+
+---
+
+### `deal_room/training/grpo_trainer.py` — ⚠️ Skeletal
+
+`compute_group_relative_advantage()` is correct. Imports `REWARD_WEIGHTS` from
+constants. `_default_policy` is random. No model integration — requires
+Qwen2.5-3B + QLoRA connection. Not part of the four fixes.
+
+---
+
+### `deal_room/curriculum/adaptive_generator.py` — ⚠️ Standalone
+
+F1-F6 failure modes. 20/60/20 difficulty split. Not wired into training loop.
+Not part of the four fixes.
+
+---
+
+## Step Pipeline (Current State with Fix Positions)
+
+```
+step(action):
+  [1]  lookahead_was_requested = extract(action.lookahead)    ← FIRST LINE ✅
+  [2]  state_before = StateSnapshot(self._state)              ← before mutations ✅
+  [3]  LookaheadSimulator.simulate()                         ← FIX #3 (medium)
+  [4]  _bayesian_update() × all stakeholders                 ✅
+  [5]  CommitteeDeliberationEngine.run()                      ✅
+         Layer 1: propagate_beliefs()   [pure Python, always]
+         Layer 2: _generate_summary()   [MiniMax 5s, display only]
+  [6]  _update_noisy_engagement()                             ✅
+  [7]  _generate_stakeholder_responses()                      ✅
+  [8]  _check_veto_termination()                             ← FIX #1 (critical)
+  [9]  _compute_reward(action, state_before, lookahead)       ✅
+  [10] _build_observation(responses=responses)               ← FIX #2 (high)
+  [11] return (obs, reward, done, info)
+```
+
+---
+
+## Required Fixes Priority
+
+| # | Fix | Where | Status |
+|---|-----|-------|--------|
+| 1 | Wire CVaR veto to `done` flag | `dealroom_v3.py` | ❌ Not implemented |
+| 2 | Populate `stakeholder_messages` | `dealroom_v3.py` | ❌ Not implemented |
+| 3 | Lazy API key validation | `dealroom_v3.py` | ⚠️ Blocks unit tests |
+| 4 | Wire LookaheadSimulator | `dealroom_v3.py` | ❌ Not called |
+| — | Create `constants.py` | New file | ❌ Not created |

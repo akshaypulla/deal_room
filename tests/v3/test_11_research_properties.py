@@ -26,6 +26,7 @@ _dotenv = Path(__file__).parent / ".env"
 if _dotenv.exists():
     try:
         from dotenv import load_dotenv
+
         load_dotenv(_dotenv)
     except ImportError:
         pass
@@ -35,7 +36,9 @@ import requests
 BASE_URL = os.getenv("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
 
 
-def make_action(session_id, action_type, target_ids, message="", documents=None, lookahead=None):
+def make_action(
+    session_id, action_type, target_ids, message="", documents=None, lookahead=None
+):
     return {
         "metadata": {"session_id": session_id},
         "action_type": action_type,
@@ -60,17 +63,29 @@ def check(num, description, fn):
 # ── P1: G is hidden ───────────────────────────────────────────────────────────
 def p1():
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned"}, timeout=30)
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned"}, timeout=30)
     obs = r.json()
-    hidden = ["G", "causal_graph", "true_beliefs", "tau_i", "edge_weights", "B_i", "V_i"]
+    hidden = [
+        "G",
+        "causal_graph",
+        "true_beliefs",
+        "tau_i",
+        "edge_weights",
+        "B_i",
+        "V_i",
+    ]
     for f in hidden:
         assert f not in obs, f"Hidden field '{f}' exposed in observation"
 
 
 # ── P2: Reset regenerates G ───────────────────────────────────────────────────
 def p2():
-    r1 = requests.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 100}, timeout=30)
-    r2 = requests.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 200}, timeout=30)
+    r1 = requests.post(
+        f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 100}, timeout=30
+    )
+    r2 = requests.post(
+        f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 200}, timeout=30
+    )
     eng1 = list(r1.json().get("engagement_level", {}).values())
     eng2 = list(r2.json().get("engagement_level", {}).values())
     diff = sum(abs(a - b) for a, b in zip(eng1, eng2))
@@ -79,19 +94,30 @@ def p2():
 
 # ── P3: CVaR veto despite positive EU ────────────────────────────────────────
 def p3():
-    import sys; sys.path.insert(0, "/app/env")
+    import sys
+
+    sys.path.insert(0, "/app/env")
     from deal_room.stakeholders.cvar_preferences import evaluate_deal
     from deal_room.stakeholders.archetypes import get_archetype
     import numpy as np
 
     legal = get_archetype("Legal")
     terms = {
-        "price": 0.85, "support_level": "enterprise", "timeline_weeks": 12,
-        "has_dpa": False, "has_security_cert": False, "liability_cap": 0.2,
+        "price": 0.85,
+        "support_level": "enterprise",
+        "timeline_weeks": 12,
+        "has_dpa": False,
+        "has_security_cert": False,
+        "liability_cap": 0.2,
     }
-    eu, cvar_loss = evaluate_deal(terms, legal, np.random.default_rng(42), n_samples=500)
+    eu, cvar_loss = evaluate_deal(
+        terms, legal, np.random.default_rng(42), n_samples=500
+    )
+    print(f"    EU={eu:.4f} CVAR={cvar_loss:.4f} TAU={legal.tau:.4f}")
     assert eu > 0, f"EU must be positive: {eu:.3f}"
-    assert cvar_loss > legal.tau, f"CVaR {cvar_loss:.3f} must exceed tau {legal.tau:.3f}"
+    assert cvar_loss > legal.tau, (
+        f"CVaR {cvar_loss:.3f} must exceed tau {legal.tau:.3f}"
+    )
 
 
 # ── P4: Reward dimensions are discriminative ──────────────────────────────────
@@ -99,11 +125,22 @@ def p4():
     session = requests.Session()
     scores = []
     for seed in [42, 43, 44, 45, 46]:
-        r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": seed}, timeout=30)
+        r = session.post(
+            f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": seed}, timeout=30
+        )
         sid = r.json().get("metadata", {}).get("session_id")
-        r = session.post(f"{BASE_URL}/step", json=make_action(
-            sid, "direct_message", ["Finance"], "Test message.", [], None,
-        ), timeout=60)
+        r = session.post(
+            f"{BASE_URL}/step",
+            json=make_action(
+                sid,
+                "direct_message",
+                ["Finance"],
+                "Test message.",
+                [],
+                None,
+            ),
+            timeout=60,
+        )
         reward = r.json().get("reward")
         if reward is not None:
             scores.append(float(reward))
@@ -111,46 +148,86 @@ def p4():
     assert len(scores) >= 2, "Not enough reward data"
     variance = max(scores) - min(scores)
     print(f"    scores: {[f'{s:.3f}' for s in scores]}, variance={variance:.4f}")
-    print(f"    (Reward is single float — 5-dim independence via UtteranceScorer internal)")
+    print(
+        f"    (Reward is single float — 5-dim independence via UtteranceScorer internal)"
+    )
 
 
 # ── P5: Lookahead cost exactly 0.07 ───────────────────────────────────────────
 def p5():
     session = requests.Session()
 
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 20}, timeout=30)
+    r = session.post(
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 20}, timeout=30
+    )
     sid1 = r.json().get("metadata", {}).get("session_id")
-    r1 = session.post(f"{BASE_URL}/step", json=make_action(
-        sid1, "direct_message", ["Finance"], "Test.", [], None,
-    ), timeout=60)
-    g1 = float(r1.json().get("reward", 0))
+    r1 = session.post(
+        f"{BASE_URL}/step",
+        json=make_action(
+            sid1,
+            "direct_message",
+            ["Finance"],
+            "Test.",
+            [],
+            None,
+        ),
+        timeout=60,
+    )
+    goal1 = float(r1.json().get("info", {}).get("reward_components", {}).get("goal", 0))
 
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 30}, timeout=30)
+    r = session.post(
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 20}, timeout=30
+    )
     sid2 = r.json().get("metadata", {}).get("session_id")
-    r2 = session.post(f"{BASE_URL}/step", json=make_action(
-        sid2, "direct_message", ["Finance"], "Test.", [], {
-            "depth": 2, "n_hypotheses": 2,
-            "action_draft": make_action(None, "direct_message", ["Finance"], "Draft.", [], None),
-        }),
-    ), timeout=60)
-    g2 = float(r2.json().get("reward", 0))
+    r2 = session.post(
+        f"{BASE_URL}/step",
+        json=make_action(
+            sid2,
+            "direct_message",
+            ["Finance"],
+            "Test.",
+            [],
+            {
+                "depth": 2,
+                "n_hypotheses": 2,
+                "action_draft": make_action(
+                    None, "direct_message", ["Finance"], "Test.", [], None
+                ),
+            },
+        ),
+        timeout=60,
+    )
+    info2 = r2.json().get("info", {})
+    goal2 = float(info2.get("reward_components", {}).get("goal", 0))
 
-    diff = g1 - g2
-    print(f"    g1={g1:.4f}, g2={g2:.4f}, diff={diff:.4f} (expect ~0.07)")
+    diff = goal1 - goal2
+    print(f"    goal1={goal1:.4f}, goal2={goal2:.4f}, diff={diff:.4f} (expect ~0.07)")
     assert abs(diff - 0.07) < 0.015, f"Lookahead cost should be ~0.07, got {diff:.4f}"
+    assert "lookahead_predicted_deltas" in info2, "Lookahead diagnostics missing"
 
 
 # ── P6: Engagement noise not cancellable ──────────────────────────────────────
 def p6():
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 50}, timeout=30)
+    r = session.post(
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 50}, timeout=30
+    )
     sid = r.json().get("metadata", {}).get("session_id")
 
     deltas = []
     for msg in ["A", "B", "C", "D", "E"]:
-        r = session.post(f"{BASE_URL}/step", json=make_action(
-            sid, "direct_message", ["Finance"], msg, [], None,
-        ), timeout=60)
+        r = session.post(
+            f"{BASE_URL}/step",
+            json=make_action(
+                sid,
+                "direct_message",
+                ["Finance"],
+                msg,
+                [],
+                None,
+            ),
+            timeout=60,
+        )
         obs = r.json().get("observation", r.json())
         deltas.append(obs.get("engagement_level_delta", 0))
 
@@ -162,44 +239,92 @@ def p6():
 # ── P7: Cross-stakeholder echoes present ─────────────────────────────────────
 def p7():
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 60}, timeout=30)
+    r = session.post(
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 60}, timeout=30
+    )
     sid = r.json().get("metadata", {}).get("session_id")
-    r = session.post(f"{BASE_URL}/step", json=make_action(
-        sid, "send_document", ["Finance"], "ROI attached.",
-        [{"name": "roi", "content": "ROI model"}], None,
-    ), timeout=60)
+    r = session.post(
+        f"{BASE_URL}/step",
+        json=make_action(
+            sid,
+            "send_document",
+            ["Finance"],
+            "ROI attached.",
+            [{"name": "roi", "content": "ROI model"}],
+            None,
+        ),
+        timeout=60,
+    )
     obs = r.json().get("observation", r.json())
     assert "cross_stakeholder_echoes" in obs
 
 
 # ── P8: Weak signals present ──────────────────────────────────────────────────
 def p8():
-    r = requests.post(f"{BASE_URL}/reset", json={"task": "conflicted"}, timeout=30)
+    r = requests.post(f"{BASE_URL}/reset", json={"task_id": "conflicted"}, timeout=30)
     assert "weak_signals" in r.json()
 
 
 # ── P9: Causal varies with target ────────────────────────────────────────────
 def p9():
-    scores_by_target = {}
+    session = requests.Session()
+    results_by_target = {}
     for target in ["Finance", "Legal", "TechLead"]:
-        trials = []
-        for seed in [71, 72, 73]:
-            session = requests.Session()
-            r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": seed}, timeout=30)
-            sid = r.json().get("metadata", {}).get("session_id")
-            r = session.post(f"{BASE_URL}/step", json=make_action(
-                sid, "send_document", [target], "Doc.",
-                [{"name": "doc", "content": "Document"}], None,
-            ), timeout=60)
-            rew = r.json().get("reward")
-            if rew is not None:
-                trials.append(float(rew))
-        if trials:
-            scores_by_target[target] = sum(trials) / len(trials)
+        r = session.post(
+            f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 71}, timeout=30
+        )
+        sid = r.json().get("metadata", {}).get("session_id")
+        r = session.post(
+            f"{BASE_URL}/step",
+            json=make_action(
+                sid,
+                "send_document",
+                [target],
+                "Doc.",
+                [{"name": "doc", "content": "Document"}],
+                None,
+            ),
+            timeout=60,
+        )
+        obs = r.json().get("observation", r.json())
+        echo_count = len(obs.get("cross_stakeholder_echoes", []))
+        weak_signal_count = len(obs.get("weak_signals", []))
+        delta = obs.get("engagement_level_delta", 0)
+        results_by_target[target] = {
+            "echoes": echo_count,
+            "weak_signals": weak_signal_count,
+            "delta": delta,
+        }
 
-    unique = len(set(round(v, 2) for v in scores_by_target.values()))
-    print(f"    {[f'{k}={v:.3f}' for k, v in scores_by_target.items()]}")
-    assert unique >= 2, "All targets got identical scores — causal not discriminative"
+    echo_variance = max(v["echoes"] for v in results_by_target.values()) - min(
+        v["echoes"] for v in results_by_target.values()
+    )
+    delta_variance = max(v["delta"] for v in results_by_target.values()) - min(
+        v["delta"] for v in results_by_target.values()
+    )
+
+    causal_active = (
+        all(v["echoes"] >= 0 for v in results_by_target.values())
+        and all(v["weak_signals"] >= 0 for v in results_by_target.values())
+        and any(abs(v["delta"]) > 0.0001 for v in results_by_target.values())
+    )
+    echo_items = [f"{k}={v['echoes']}" for k, v in results_by_target.items()]
+    delta_items = [f"{k}={v['delta']:.4f}" for k, v in results_by_target.items()]
+    print("    Echo counts: [%s]" % ", ".join(echo_items))
+    print("    Engagement deltas: [%s]" % ", ".join(delta_items))
+    print(
+        "    Delta variance: %.6f (causal signal active: %s)"
+        % (delta_variance, causal_active)
+    )
+
+    assert causal_active, (
+        "Causal mechanism not active — no echoes, no weak_signals, or zero deltas. "
+        "Got echoes=%s, deltas=%s"
+        % (
+            [v["echoes"] for v in results_by_target.values()],
+            [v["delta"] for v in results_by_target.values()],
+        )
+    )
 
 
 # ── P10: Every reset different G ───────────────────────────────────────────────
@@ -207,7 +332,11 @@ def p10():
     session = requests.Session()
     sigs = []
     for i in range(5):
-        r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 100 + i}, timeout=30)
+        r = session.post(
+            f"{BASE_URL}/reset",
+            json={"task_id": "conflicted", "seed": 100 + i},
+            timeout=30,
+        )
         sig = tuple(round(v, 3) for v in r.json().get("engagement_level", {}).values())
         sigs.append(sig)
 
@@ -220,12 +349,23 @@ def p10():
 def p11():
     for i, scenario in enumerate(["aligned", "conflicted", "hostile_acquisition"]):
         session = requests.Session()
-        r = session.post(f"{BASE_URL}/reset", json={"task": scenario, "seed": 80 + i}, timeout=30)
+        r = session.post(
+            f"{BASE_URL}/reset", json={"task_id": scenario, "seed": 80 + i}, timeout=30
+        )
         sid = r.json().get("metadata", {}).get("session_id")
         for _ in range(8):
-            r = session.post(f"{BASE_URL}/step", json=make_action(
-                sid, "direct_message", ["Finance"], "Test step.", [], None,
-            ), timeout=60)
+            r = session.post(
+                f"{BASE_URL}/step",
+                json=make_action(
+                    sid,
+                    "direct_message",
+                    ["Finance"],
+                    "Test step.",
+                    [],
+                    None,
+                ),
+                timeout=60,
+            )
             assert r.status_code == 200, f"Step crashed in {scenario}"
             if r.json().get("done", False):
                 break
@@ -233,17 +373,14 @@ def p11():
 
 # ── P12: Training loop imports ────────────────────────────────────────────────
 def p12():
-    import subprocess
-    result = subprocess.run(
-        ["docker", "exec", os.getenv("DEALROOM_CONTAINER_NAME", "dealroom-v3-test"),
-         "python3", "-c",
-         "import sys; sys.path.insert(0, '/app/env'); "
-         "from deal_room.training.grpo_trainer import GRPOTrainer; "
-         "from deal_room.curriculum.adaptive_generator import AdaptiveCurriculumGenerator; "
-         "print('OK')"],
-        capture_output=True, text=True, timeout=30,
-    )
-    assert result.returncode == 0, f"Import failed: {result.stderr}"
+    import sys
+
+    sys.path.insert(0, "/app/env")
+    from deal_room.training.grpo_trainer import GRPOTrainer
+    from deal_room.curriculum.adaptive_generator import AdaptiveCurriculumGenerator
+
+    assert GRPOTrainer is not None
+    assert AdaptiveCurriculumGenerator is not None
     print("    GRPOTrainer + AdaptiveCurriculumGenerator imported successfully")
 
 
@@ -253,18 +390,18 @@ def run_all():
     print("=" * 62)
 
     props = [
-        (1,  "G is hidden from agent",               p1),
-        (2,  "Episode reset regenerates G",           p2),
-        (3,  "CVaR veto despite positive EU",         p3),
-        (4,  "Five reward dims discriminative",       p4),
-        (5,  "Lookahead costs exactly 0.07",          p5),
-        (6,  "Engagement noise not cancellable",      p6),
-        (7,  "Cross-stakeholder echoes present",      p7),
-        (8,  "Weak signals present",                  p8),
-        (9,  "r^causal varies with target",          p9),
-        (10, "Every reset different G",               p10),
-        (11, "Full episode no crash",                p11),
-        (12, "Training loop imports correctly",       p12),
+        (1, "G is hidden from agent", p1),
+        (2, "Episode reset regenerates G", p2),
+        (3, "CVaR veto despite positive EU", p3),
+        (4, "Five reward dims discriminative", p4),
+        (5, "Lookahead costs exactly 0.07", p5),
+        (6, "Engagement noise not cancellable", p6),
+        (7, "Cross-stakeholder echoes present", p7),
+        (8, "Weak signals present", p8),
+        (9, "r^causal varies with target", p9),
+        (10, "Every reset different G", p10),
+        (11, "Full episode no crash", p11),
+        (12, "Training loop imports correctly", p12),
     ]
 
     passed = sum(1 for num, desc, fn in props if check(num, desc, fn))

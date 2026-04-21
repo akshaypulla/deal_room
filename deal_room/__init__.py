@@ -7,4 +7,6 @@ try:
 except ImportError:
     from environment.dealroom_v3 import DealRoomV3
 
-__all__ = ["DealRoomV3"]
+DealRoomEnvironment = DealRoomV3
+
+__all__ = ["DealRoomV3", "DealRoomEnvironment"]

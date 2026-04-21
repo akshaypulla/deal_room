@@ -50,27 +50,33 @@ REQUIRED_FIELDS = [
     "done",
 ]
 
-HIDDEN_FIELDS = [
+HIDDEN_FIELDS = {
+    # Core research-grade internal state — must never appear as a top-level key
     "G",
     "causal_graph",
     "graph",
     "true_beliefs",
     "belief_distributions",
+    "belief_state",
+    "B_i",
+    "V_i",
+    # CVaR / risk parameters — internal to the grader
     "tau",
     "tau_i",
     "risk_thresholds",
     "cvar_thresholds",
     "edge_weights",
     "w_ij",
+    # Deliberation / internal dialogue
     "deliberation_transcript",
     "deliberation_log",
     "internal_dialogue",
-    "belief_state",
-    "B_i",
-    "V_i",
+    # Utility / preference parameters
     "u_i",
     "u_ij",
-]
+    # Do NOT add substrings here — matching is exact key check,
+    # so "graph" matches only key "graph", NOT "graph_seed" or "graph_structure"
+}
 
 ACTION_TYPES = [
     "direct_message",
@@ -91,7 +97,7 @@ VALID_TARGETS = [
 
 def test_1_1_all_required_fields_present():
     print("\n[1.1] Required fields in observation...")
-    r = requests.post(f"{BASE_URL}/reset", json={"task": "aligned"}, timeout=30)
+    r = requests.post(f"{BASE_URL}/reset", json={"task_id": "aligned"}, timeout=30)
     obs = r.json()
     missing = [f for f in REQUIRED_FIELDS if f not in obs]
     if missing:
@@ -102,7 +108,7 @@ def test_1_1_all_required_fields_present():
 def test_1_2_no_hidden_fields_exposed():
     print("\n[1.2] Hidden/internal fields not exposed...")
     r = requests.post(
-        f"{BASE_URL}/reset", json={"task": "hostile_acquisition"}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "hostile_acquisition"}, timeout=30
     )
     obs = r.json()
 
@@ -110,9 +116,7 @@ def test_1_2_no_hidden_fields_exposed():
         found = []
         if isinstance(d, dict):
             for k, v in d.items():
-                if k in HIDDEN_FIELDS or any(
-                    h.lower() in k.lower() for h in HIDDEN_FIELDS
-                ):
+                if k in HIDDEN_FIELDS:
                     found.append(f"{path}.{k}")
                 found.extend(find_hidden(v, f"{path}.{k}"))
         elif isinstance(d, list):
@@ -129,7 +133,7 @@ def test_1_2_no_hidden_fields_exposed():
 def test_1_3_field_types_correct():
     print("\n[1.3] Field types match specification...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 42})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 42})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     r = session.post(
@@ -163,8 +167,8 @@ def test_1_3_field_types_correct():
         "cross_stakeholder_echoes must be list"
     )
     assert isinstance(obs.get("veto_precursors"), dict), "veto_precursors must be dict"
-    assert isinstance(obs.get("deal_momentum"), (int, float)), (
-        "deal_momentum must be numeric"
+    assert isinstance(obs.get("deal_momentum"), str), (
+        "deal_momentum must be str (categorical: stalling/building/surging)"
     )
     assert isinstance(obs.get("deal_stage"), str), "deal_stage must be str"
     assert isinstance(obs.get("active_blockers"), list), "active_blockers must be list"
@@ -178,7 +182,7 @@ def test_1_3_field_types_correct():
 
 def test_1_4_engagement_history_window_size():
     print("\n[1.4] Engagement history window size...")
-    r = requests.post(f"{BASE_URL}/reset", json={"task": "conflicted"}, timeout=30)
+    r = requests.post(f"{BASE_URL}/reset", json={"task_id": "conflicted"}, timeout=30)
     obs = r.json()
     history = obs.get("engagement_history", [])
 
@@ -196,7 +200,7 @@ def test_1_4_engagement_history_window_size():
 def test_1_5_engagement_level_delta_single_float():
     print("\n[1.5] engagement_level_delta is single float...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 10})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 10})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     r = session.post(
@@ -225,7 +229,7 @@ def test_1_5_engagement_level_delta_single_float():
 
 def test_1_6_cross_stakeholder_echoes_is_list():
     print("\n[1.6] cross_stakeholder_echoes is list of dicts...")
-    r = requests.post(f"{BASE_URL}/reset", json={"task": "aligned"}, timeout=30)
+    r = requests.post(f"{BASE_URL}/reset", json={"task_id": "aligned"}, timeout=30)
     cse = r.json().get("cross_stakeholder_echoes")
 
     assert isinstance(cse, list), (
@@ -245,7 +249,7 @@ def test_1_6_cross_stakeholder_echoes_is_list():
 def test_1_7_stakeholder_messages_populated_after_step():
     print("\n[1.7] stakeholder_messages populated after step...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 20})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 20})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     r = session.post(
@@ -273,7 +277,7 @@ def test_1_7_stakeholder_messages_populated_after_step():
 def test_1_8_action_schema_accepts_lookahead():
     print("\n[1.8] Action schema accepts lookahead...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 30})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 30})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     r = session.post(
@@ -312,7 +316,7 @@ def test_1_8_action_schema_accepts_lookahead():
 def test_1_9_approval_path_progress_structure():
     print("\n[1.9] approval_path_progress structure...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted"}, timeout=30)
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted"}, timeout=30)
     obs = r.json()
     progress = obs.get("approval_path_progress", {})
 
@@ -330,7 +334,7 @@ def test_1_9_approval_path_progress_structure():
 def test_1_10_deal_stage_valid_transitions():
     print("\n[1.10] deal_stage valid values and round increment...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 40})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 40})
     session_id = r.json().get("metadata", {}).get("session_id")
     obs0 = r.json()
 
@@ -367,7 +371,7 @@ def test_1_10_deal_stage_valid_transitions():
 def test_1_11_documents_field_format():
     print("\n[1.11] documents field format (list of {name, content} objects)...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 50})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 50})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     r = session.post(

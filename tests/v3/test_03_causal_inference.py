@@ -46,7 +46,7 @@ def make_action(
 
 def run_targeted_intervention(scenario, target, document=None, seed=None):
     session = requests.Session()
-    payload = {"task": scenario}
+    payload = {"task_id": scenario}
     if seed is not None:
         payload["seed"] = seed
     r = session.post(f"{BASE_URL}/reset", json=payload, timeout=30)
@@ -84,7 +84,8 @@ def test_3_1_targeted_stakeholder_engagement_changes():
 def test_3_2_cross_stakeholder_echoes_detected():
     print("\n[3.2] Cross-stakeholder echoes (belief propagation)...")
     propagation_count = 0
-    for i in range(8):
+    n = 12
+    for i in range(n):
         obs = run_targeted_intervention(
             "conflicted", "Finance", "roi_model", seed=20 + i
         )
@@ -92,9 +93,11 @@ def test_3_2_cross_stakeholder_echoes_detected():
         if echoes and len(echoes) > 0:
             propagation_count += 1
 
-    rate = propagation_count / 8
-    print(f"  Echoes detected in {propagation_count}/8 episodes ({rate:.0%})")
-    assert rate >= 0.3, f"Propagation too rare ({rate:.0%}) — causal signal weak"
+    rate = propagation_count / n
+    print(f"  Echoes detected in {propagation_count}/{n} episodes ({rate:.0%})")
+    assert rate >= 0.65, (
+        f"Propagation too rare ({rate:.0%}) — expected at least 65% echo recall"
+    )
     print("  ✓ Cross-stakeholder echoes present (propagation active)")
 
 
@@ -102,7 +105,7 @@ def test_3_3_engagement_history_window_slides():
     print("\n[3.3] Engagement history slides correctly...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 30}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 30}, timeout=30
     )
     obs0 = r.json()
     history_len_0 = len(obs0.get("engagement_history", []))
@@ -135,7 +138,7 @@ def test_3_4_engagement_noise_not_cancellable():
     print("\n[3.4] Engagement noise cannot be cancelled...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 40}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 40}, timeout=30
     )
     session_id = r.json().get("metadata", {}).get("session_id")
 
@@ -227,22 +230,32 @@ def test_3_7_echo_content_structure():
 
 def test_3_8_causal_signal_responds_to_graph_structure():
     print("\n[3.8] Causal signal responds to graph authority structure...")
-    hub_deltas, leaf_deltas = [], []
+    hub_impacts, leaf_impacts = [], []
 
     # ExecSponsor is authority hub in all scenarios
-    for i in range(4):
+    for i in range(8):
         obs = run_targeted_intervention("conflicted", "ExecSponsor", None, seed=90 + i)
-        hub_deltas.append(obs.get("engagement_level_delta", 0))
+        hub_impacts.append(
+            abs(obs.get("engagement_level_delta", 0))
+            + 0.03 * len(obs.get("cross_stakeholder_echoes", []))
+        )
 
-    # Leaf stakeholders have lower betweenness centrality
-    for i in range(4):
-        obs = run_targeted_intervention("conflicted", "TechLead", None, seed=100 + i)
-        leaf_deltas.append(obs.get("engagement_level_delta", 0))
+    # Procurement is a lower-impact leaf in the public six-stakeholder benchmark.
+    for i in range(8):
+        obs = run_targeted_intervention("conflicted", "Procurement", None, seed=100 + i)
+        leaf_impacts.append(
+            abs(obs.get("engagement_level_delta", 0))
+            + 0.03 * len(obs.get("cross_stakeholder_echoes", []))
+        )
 
-    var_hub = np.var(hub_deltas) if len(hub_deltas) > 1 else 0
-    var_leaf = np.var(leaf_deltas) if len(leaf_deltas) > 1 else 0
-    print(f"  Hub (ExecSponsor) delta variance: {var_hub:.6f}")
-    print(f"  Leaf (TechLead) delta variance: {var_leaf:.6f}")
+    hub_impact = float(np.mean(hub_impacts))
+    leaf_impact = float(np.mean(leaf_impacts))
+    print(f"  Hub (ExecSponsor) mean impact: {hub_impact:.6f}")
+    print(f"  Leaf (Procurement) mean impact: {leaf_impact:.6f}")
+    assert hub_impact > leaf_impact * 1.15, (
+        f"Hub node should show materially more causal impact than leaf. "
+        f"Got hub={hub_impact:.3f}, leaf={leaf_impact:.3f}."
+    )
     print("  ✓ Causal signal varies by graph position")
 
 

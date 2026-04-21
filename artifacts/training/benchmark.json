@@ -1,0 +1,50 @@
+{
+  "random": {
+    "metrics": {
+      "goal_reward": 0.5189737655720404,
+      "trust_reward": 0.59375,
+      "info_reward": 0.5683089253334777,
+      "risk_reward": 0.5,
+      "causal_reward": 0.013437500000000002,
+      "lookahead_usage_rate": 0.125,
+      "prediction_accuracy": 0.06893028846153845,
+      "total_reward": 1.3566834058388224,
+      "weighted_reward": 1.8566834058388224,
+      "episodes_completed": 4,
+      "task_mix": {
+        "aligned": 0.5,
+        "conflicted": 0.5
+      },
+      "terminal_outcomes": {
+        "incomplete": 2,
+        "veto_by_Legal": 2
+      },
+      "checkpoint_path": null
+    },
+    "episodes": 4
+  },
+  "heuristic": {
+    "metrics": {
+      "goal_reward": 0.5361003926165019,
+      "trust_reward": 0.6336921141871505,
+      "info_reward": 0.7269588245896468,
+      "risk_reward": 0.5,
+      "causal_reward": 0.007500000000000001,
+      "lookahead_usage_rate": 0.0,
+      "prediction_accuracy": 0.0,
+      "total_reward": 1.5291211436379397,
+      "weighted_reward": 2.0291211436379397,
+      "episodes_completed": 4,
+      "task_mix": {
+        "aligned": 0.5,
+        "conflicted": 0.5
+      },
+      "terminal_outcomes": {
+        "incomplete": 2,
+        "veto_by_Legal": 2
+      },
+      "checkpoint_path": null
+    },
+    "episodes": 4
+  }
+}

@@ -19,6 +19,8 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, "/app/env")
+
 _dotenv = Path(__file__).parent / ".env"
 if _dotenv.exists():
     try:
@@ -30,7 +32,12 @@ if _dotenv.exists():
 
 import requests
 
+from deal_room.rewards.utterance_scorer import LOOKAHEAD_COST
+
 BASE_URL = os.getenv("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
+REWARD_VARIANCE_MIN_SPREAD = 0.05
+LOOKAHEAD_MIN_RECORDED = 15
+LOOKAHEAD_MIN_ACCURACY = 0.60
 
 
 def get_reward(result):
@@ -56,7 +63,7 @@ def make_action(
 def test_2_1_reward_is_single_float():
     print("\n[2.1] Reward is a single float (not a dict)...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 10})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 10})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     r = session.post(
@@ -91,7 +98,7 @@ def test_2_2_lookahead_cost_is_exactly_007():
     session = requests.Session()
 
     # Without lookahead
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 20})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 20})
     sid1 = r.json().get("metadata", {}).get("session_id")
     r1 = session.post(
         f"{BASE_URL}/step",
@@ -105,10 +112,10 @@ def test_2_2_lookahead_cost_is_exactly_007():
         ),
         timeout=60,
     )
-    g1 = get_reward(r1.json())
+    goal1 = float(r1.json().get("info", {}).get("reward_components", {}).get("goal", 0))
 
     # With lookahead
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 30})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 20})
     sid2 = r.json().get("metadata", {}).get("session_id")
     r2 = session.post(
         f"{BASE_URL}/step",
@@ -122,30 +129,33 @@ def test_2_2_lookahead_cost_is_exactly_007():
                 "depth": 2,
                 "n_hypotheses": 2,
                 "action_draft": make_action(
-                    None, "direct_message", ["Finance"], "Draft.", [], None
+                    None, "direct_message", ["Finance"], "Test message.", [], None
                 ),
             },
         ),
         timeout=60,
     )
-    g2 = get_reward(r2.json())
+    info2 = r2.json().get("info", {})
+    goal2 = float(info2.get("reward_components", {}).get("goal", 0))
 
-    diff = g1 - g2
-    expected_cost = 0.07
-    # Allow at most 0.01 tolerance (cost should be within 0.065–0.075)
+    diff = goal1 - goal2
+    expected_cost = LOOKAHEAD_COST
     assert abs(diff - expected_cost) < 0.015, (
-        f"Lookahead cost should be {expected_cost:.3f}, got {diff:.3f} (g1={g1:.3f}, g2={g2:.3f})"
+        f"Lookahead goal cost should be {expected_cost:.3f}, got {diff:.3f} (goal1={goal1:.3f}, goal2={goal2:.3f})"
     )
+    assert "lookahead_predicted_deltas" in info2, "Lookahead diagnostics missing from info"
 
     print(
-        f"  ✓ cost = {diff:.4f} (expected 0.07, diff={abs(diff - expected_cost):.4f})"
+        f"  ✓ goal cost = {diff:.4f} (expected 0.07, diff={abs(diff - expected_cost):.4f})"
     )
 
 
 def test_2_3_reward_in_range_after_valid_actions():
-    print("\n[2.3] All rewards stay in [0.0, 1.0] across action types...")
+    print(
+        "\n[2.3] Reward components stay in [0.0, 1.0] and scalar reward stays finite..."
+    )
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 40})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 40})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     actions = [
@@ -171,42 +181,47 @@ def test_2_3_reward_in_range_after_valid_actions():
 
     for a in actions:
         r = session.post(f"{BASE_URL}/step", json=a, timeout=60)
-        reward = get_reward(r.json())
+        result = r.json()
+        reward = get_reward(result)
         if reward is not None:
-            assert 0.0 <= reward <= 1.0, f"Reward {reward} outside [0, 1]"
+            assert reward == reward, "Reward must be finite (not NaN)"
+        components = result.get("info", {}).get("reward_components", {})
+        for dim in ["goal", "trust", "info", "risk", "causal"]:
+            if dim in components:
+                assert 0.0 <= float(components[dim]) <= 1.0, (
+                    f"Reward component {dim}={components[dim]} outside [0, 1]"
+                )
 
-    print("  ✓ All rewards in [0, 1] across multiple action types")
+    print("  ✓ Reward components remain bounded; scalar reward remains finite")
 
 
 def test_2_4_deterministic_reward_with_seed():
-    print("\n[2.4] Grader is deterministic with seed...")
-    action = make_action(None, "direct_message", ["Finance"], "Same message.", [])
+    print("\n[2.4] Grader is deterministic for same seed and same action...")
     rewards = []
 
     for trial in range(3):
         session = requests.Session()
-        seed = 100 + trial * 11
-        r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": seed})
+        seed = 100
+        r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": seed})
         session_id = r.json().get("metadata", {}).get("session_id")
-        action["metadata"]["session_id"] = session_id
+        action = make_action(session_id, "direct_message", ["Finance"], "Same message.", [])
 
         r = session.post(f"{BASE_URL}/step", json=action, timeout=60)
         reward = get_reward(r.json())
-        if reward is not None:
-            rewards.append(reward)
+        assert reward is not None, f"Trial {trial} returned no reward"
+        rewards.append(reward)
 
-    if len(rewards) >= 2:
-        variance = max(rewards) - min(rewards)
-        # Deterministic grader should have very low variance across same seed
-        print(
-            f"  ✓ {len(rewards)} trials, range={variance:.4f} (should be low for deterministic)"
-        )
+    spread = max(rewards) - min(rewards)
+    assert spread < 1e-9, (
+        f"Same seed/action should replay exactly. Rewards={rewards}, spread={spread:.12f}"
+    )
+    print(f"  ✓ {len(rewards)} same-seed trials replay exactly")
 
 
 def test_2_5_repeat_same_action_does_not_escalate_reward():
     print("\n[2.5] Repeating same action without new info does NOT inflate reward...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 50})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 50})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     same_action = make_action(session_id, "direct_message", ["Finance"], "Repeat.", [])
@@ -224,6 +239,9 @@ def test_2_5_repeat_same_action_does_not_escalate_reward():
     # It may vary due to noise, but should not systematically increase
     trend = g3 - g1
     print(f"  g1={g1:.3f}, g2={g2:.3f}, g3={g3:.3f}, trend={trend:+.3f}")
+    assert trend <= 0.01, (
+        f"Repeating same action inflated reward: g1={g1:.3f}, g3={g3:.3f}, trend={trend:+.3f}"
+    )
     print("  ✓ Repeating same action does not systematically inflate reward")
 
 
@@ -236,7 +254,7 @@ def test_2_6_different_targets_different_causal_scores():
         for _ in range(3):
             session = requests.Session()
             r = session.post(
-                f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 60}
+                f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 60}
             )
             session_id = r.json().get("metadata", {}).get("session_id")
 
@@ -269,7 +287,7 @@ def test_2_6_different_targets_different_causal_scores():
 def test_2_7_informative_action_outperforms_empty():
     print("\n[2.7] Substantive action outperforms empty/nearly-empty message...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "aligned", "seed": 70})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 70})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     r_empty = session.post(
@@ -309,7 +327,7 @@ def test_2_7_informative_action_outperforms_empty():
 def test_2_8_reward_non_trivial_variance():
     print("\n[2.8] Reward has non-trivial variance across different actions...")
     session = requests.Session()
-    r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 80})
+    r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 80})
     session_id = r.json().get("metadata", {}).get("session_id")
 
     rewards = []
@@ -340,10 +358,13 @@ def test_2_8_reward_non_trivial_variance():
         print(
             f"  reward range: {min(rewards):.3f} – {max(rewards):.3f} (spread={variance:.3f})"
         )
-        assert variance > 0.01, (
-            f"Reward has no variance ({variance:.4f}) — grader not discriminative"
+        assert variance > REWARD_VARIANCE_MIN_SPREAD, (
+            f"Reward variance too low: {variance:.4f}. Expected >{REWARD_VARIANCE_MIN_SPREAD:.2f} "
+            "for a meaningful learning signal."
         )
         print("  ✓ Reward is discriminative across action types")
+    else:
+        raise AssertionError("Not enough rewards collected to measure variance")
 
 
 def test_2_9_good_documentation_higher_than_poor():
@@ -379,7 +400,7 @@ def test_2_9_good_documentation_higher_than_poor():
 
     for seed in [90, 91, 92]:
         session = requests.Session()
-        r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": seed})
+        r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": seed})
         sid = r.json().get("metadata", {}).get("session_id")
 
         poor_action["metadata"]["session_id"] = sid
@@ -390,7 +411,7 @@ def test_2_9_good_documentation_higher_than_poor():
 
     for seed in [93, 94, 95]:
         session = requests.Session()
-        r = session.post(f"{BASE_URL}/reset", json={"task": "conflicted", "seed": seed})
+        r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": seed})
         sid = r.json().get("metadata", {}).get("session_id")
 
         good_action["metadata"]["session_id"] = sid
@@ -404,10 +425,65 @@ def test_2_9_good_documentation_higher_than_poor():
         avg_good = sum(good_rewards) / len(good_rewards)
         print(f"  poor docs avg: {avg_poor:.3f}, good docs avg: {avg_good:.3f}")
         # Good docs should score at least as high as poor docs
-        assert avg_good >= avg_poor - 0.05, (
-            "Grader scored poor docs higher than good docs — broken reward"
+        assert avg_good >= avg_poor - 0.01, (
+            f"Grader scored poor docs higher than good docs beyond tolerance: "
+            f"poor={avg_poor:.3f}, good={avg_good:.3f}"
         )
         print("  ✓ Good documentation rewarded at >= poor documentation")
+    else:
+        raise AssertionError("Could not collect both poor and good documentation rewards")
+
+
+def test_2_10_lookahead_improves_prediction_accuracy():
+    print("\n[2.10] Lookahead prediction accuracy beats random baseline...")
+    accuracies = []
+
+    for seed in range(200, 220):
+        session = requests.Session()
+        r = session.post(
+            f"{BASE_URL}/reset",
+            json={"task_id": "conflicted", "seed": seed},
+            timeout=30,
+        )
+        session_id = r.json().get("metadata", {}).get("session_id")
+        action_draft = make_action(
+            None,
+            "send_document",
+            ["Finance"],
+            "ROI model with downside cases.",
+            [{"name": "roi", "content": "ROI model"}],
+            None,
+        )
+        r = session.post(
+            f"{BASE_URL}/step",
+            json=make_action(
+                session_id,
+                "send_document",
+                ["Finance"],
+                "ROI model with downside cases.",
+                [{"name": "roi", "content": "ROI model"}],
+                {
+                    "depth": 2,
+                    "n_hypotheses": 2,
+                    "action_draft": action_draft,
+                },
+            ),
+            timeout=60,
+        )
+        info = r.json().get("info", {})
+        if info.get("lookahead_used") and info.get("lookahead_prediction_accuracy") is not None:
+            accuracies.append(float(info["lookahead_prediction_accuracy"]))
+
+    assert len(accuracies) >= LOOKAHEAD_MIN_RECORDED, (
+        f"Only {len(accuracies)} lookahead predictions recorded; expected at least "
+        f"{LOOKAHEAD_MIN_RECORDED}."
+    )
+    mean_acc = sum(accuracies) / len(accuracies)
+    assert mean_acc > LOOKAHEAD_MIN_ACCURACY, (
+        f"Lookahead prediction accuracy too low: {mean_acc:.3f}. "
+        f"Expected >{LOOKAHEAD_MIN_ACCURACY:.2f}."
+    )
+    print(f"  ✓ Lookahead accuracy mean={mean_acc:.3f} over {len(accuracies)} runs")
 
 
 def run_all():
@@ -425,6 +501,7 @@ def run_all():
         test_2_7_informative_action_outperforms_empty,
         test_2_8_reward_non_trivial_variance,
         test_2_9_good_documentation_higher_than_poor,
+        test_2_10_lookahead_improves_prediction_accuracy,
     ]
 
     failed = []

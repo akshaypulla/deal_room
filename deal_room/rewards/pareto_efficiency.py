@@ -4,14 +4,7 @@ Pareto efficiency checker for DealRoom v3 - terminal reward determination.
 
 from typing import Dict, List, Tuple
 
-
-TERMINAL_REWARDS = {
-    "deal_closed": 1.0,
-    "veto": -1.0,
-    "max_rounds": 0.0,
-    "stage_regression": -0.5,
-    "impasse": -0.75,
-}
+from deal_room.environment.constants import TERMINAL_REWARDS
 
 
 def check_pareto_optimality(

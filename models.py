@@ -90,6 +90,7 @@ class DealRoomState(BaseModel):
 
     active_blockers: List[str] = Field(default_factory=list)
     deal_stage: str = "evaluation"
+    deal_momentum: str = "stalling"
     stage_regressions: int = 0
     rounds_since_last_contact: Dict[str, int] = Field(default_factory=dict)
     approval_caps: Dict[str, float] = Field(default_factory=dict)
@@ -108,6 +109,8 @@ class DealRoomState(BaseModel):
     deal_failed: bool = False
     failure_reason: str = ""
     final_terms: Optional[Dict[str, Any]] = None
+    terminal_outcome: str = ""
+    veto_stakeholder: Optional[str] = None
 
     @field_validator("stakeholder_private")
     @classmethod

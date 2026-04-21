@@ -29,6 +29,10 @@ try:
 except Exception:
     pass
 
+from models import DealRoomAction
+
+MIN_ECHO_RECALL_RATE = 0.65
+
 
 def test_6_1_weak_signals_field_exists():
     print("\n[6.1] weak_signals field exists...")
@@ -57,15 +61,16 @@ def test_6_3_echo_structure():
     env = DealRoomV3()
     obs = env.reset(task_id="aligned")
 
-    class MockAction:
-        action_type = "send_document"
-        documents = [{"name": "roi_model", "content": "ROI content"}]
-        target_ids = ["Finance"]
-        message = "ROI model attached."
-        metadata = {"session_id": "test"}
-        lookahead = None
+    action = DealRoomAction(
+        action_type="send_document",
+        documents=[{"name": "roi_model", "content": "ROI content"}],
+        target="Finance",
+        target_ids=["Finance"],
+        message="ROI model attached.",
+        metadata={"session_id": "test"},
+    )
 
-    echoes = env._generate_cross_stakeholder_echoes(MockAction())
+    echoes = env._generate_cross_stakeholder_echoes(action)
     assert isinstance(echoes, list), f"echoes must be list, got {type(echoes).__name__}"
 
     if len(echoes) > 0:
@@ -88,15 +93,16 @@ def test_6_4_weak_signals_populated_after_action():
     env = DealRoomV3()
     obs = env.reset(task_id="conflicted")
 
-    class MockAction:
-        action_type = "send_document"
-        documents = [{"name": "DPA", "content": "DPA content"}]
-        target_ids = ["Finance"]
-        message = "DPA attached."
-        metadata = {"session_id": "test"}
-        lookahead = None
+    action = DealRoomAction(
+        action_type="send_document",
+        documents=[{"name": "DPA", "content": "DPA content"}],
+        target="Finance",
+        target_ids=["Finance"],
+        message="DPA attached.",
+        metadata={"session_id": "test"},
+    )
 
-    obs2, reward, done, info = env.step(MockAction())
+    obs2, reward, done, info = env.step(action)
     weak = obs2.weak_signals
 
     assert isinstance(weak, dict), (
@@ -106,33 +112,37 @@ def test_6_4_weak_signals_populated_after_action():
 
 
 def test_6_5_echo_firing_rate_nonzero():
-    print("\n[6.5] Echo firing rate is non-zero...")
+    print("\n[6.5] Echo firing rate meets 70% design target tolerance...")
     from deal_room.environment.dealroom_v3 import DealRoomV3
 
     fired = 0
-    n = 20
+    n = 40
 
     for i in range(n):
         env = DealRoomV3()
-        obs = env.reset(task_id="conflicted")
+        obs = env.reset(task_id="conflicted", seed=100 + i)
 
-        class MockAction:
-            action_type = "send_document"
-            documents = [{"name": "DPA", "content": "DPA content"}]
-            target_ids = ["Finance"]
-            message = "DPA attached."
-            metadata = {"session_id": "test"}
-            lookahead = None
+        action = DealRoomAction(
+            action_type="send_document",
+            documents=[{"name": "DPA", "content": "DPA content"}],
+            target="Finance",
+            target_ids=["Finance"],
+            message="DPA attached.",
+            metadata={"session_id": "test"},
+        )
 
-        obs2, _, _, _ = env.step(MockAction())
+        obs2, _, _, _ = env.step(action)
         echoes = obs2.cross_stakeholder_echoes
         if echoes and len(echoes) > 0:
             fired += 1
 
     rate = fired / n
     print(f"  Echoes fired in {fired}/{n} episodes ({rate:.0%})")
-    assert rate > 0, "Echo firing rate is 0% — echo_recall_probability broken"
-    print(f"  ✓ Echo firing rate = {rate:.0%} (non-zero)")
+    assert rate >= MIN_ECHO_RECALL_RATE, (
+        f"Echo recall too low: {rate:.2%}. Expected ≥{MIN_ECHO_RECALL_RATE:.0%} "
+        "(design target is 70%)."
+    )
+    print(f"  ✓ Echo firing rate = {rate:.0%}")
 
 
 def test_6_6_weak_signal_threshold_respected():
@@ -148,23 +158,29 @@ def test_6_6_weak_signal_threshold_respected():
     env = DealRoomV3()
     obs = env.reset(task_id="conflicted")
 
-    class MockAction:
-        action_type = "send_document"
-        documents = [{"name": "DPA", "content": "DPA"}]
-        target_ids = ["Finance"]
-        message = "Test."
-        metadata = {"session_id": "test"}
-        lookahead = None
+    action = DealRoomAction(
+        action_type="send_document",
+        documents=[{"name": "DPA", "content": "DPA"}],
+        target="Finance",
+        target_ids=["Finance"],
+        message="Test.",
+        metadata={"session_id": "test"},
+    )
 
-    obs2, _, _, _ = env.step(MockAction())
+    obs2, _, _, _ = env.step(action)
     weak = obs2.weak_signals
 
     if weak:
         for sid, val in weak.items():
-            assert isinstance(val, (int, float)), f"weak_signal[{sid}] must be numeric"
-            assert 0.0 <= val <= 1.0, f"weak_signal[{sid}]={val} outside [0,1]"
+            assert isinstance(val, list), (
+                f"weak_signal[{sid}] must be list of tags, got {type(val).__name__}"
+            )
+            for tag in val:
+                assert isinstance(tag, str), (
+                    f"weak_signal[{sid}] tag must be str, got {type(tag).__name__}"
+                )
 
-    print("  ✓ Weak signal values respect [0,1] bounds")
+    print("  ✓ Weak signal values are list[str] tags (not numeric) — format is correct")
 
 
 def test_6_7_echo_recall_probability_configured():
@@ -174,7 +190,9 @@ def test_6_7_echo_recall_probability_configured():
     prob = OBS_CONFIG.echo_recall_probability if OBS_CONFIG else None
     assert prob is not None, "echo_recall_probability not set"
     print(f"  echo_recall_probability = {prob}")
-    assert 0.0 < prob < 1.0, f"echo_recall_probability={prob} invalid (should be 0-1)"
+    assert 0.65 <= prob <= 0.75, (
+        f"echo_recall_probability={prob} outside expected design band [0.65, 0.75]"
+    )
     print(f"  ✓ Echo recall probability = {prob} (should be ~0.70)")
 
 

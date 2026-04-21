@@ -19,6 +19,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+export PYTHONPATH="$(cd "$SCRIPT_DIR/../.." && pwd):${PYTHONPATH}"
 
 # ── Load .env if present ────────────────────────────────────────────────────────
 if [ -f "$SCRIPT_DIR/.env" ]; then
@@ -28,19 +29,6 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     set +a
 fi
 
-# ── Validate required env vars ──────────────────────────────────────────────────
-if [ -z "$MINIMAX_API_KEY" ] || [ "$MINIMAX_API_KEY" = "your_minimax_api_key_here" ]; then
-    echo "ERROR: MINIMAX_API_KEY not set."
-    echo "  cp .env.example .env  →  edit .env with your MiniMax API key"
-    exit 1
-fi
-
-if [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" = "your_openai_api_key_here" ]; then
-    echo "ERROR: OPENAI_API_KEY not set."
-    echo "  cp .env.example .env  →  edit .env with your OpenAI API key"
-    exit 1
-fi
-
 # ── Container check ────────────────────────────────────────────────────────────
 CONTAINER_NAME="${DEALROOM_CONTAINER_NAME:-dealroom-v3-test}"
 
@@ -48,8 +36,8 @@ if ! docker ps --filter "name=$CONTAINER_NAME" -q | grep -q .; then
     echo "Container '$CONTAINER_NAME' not running. Starting..."
     docker run --rm -d \
         -p 7860:7860 \
-        -e MINIMAX_API_KEY="$MINIMAX_API_KEY" \
-        -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+        ${MINIMAX_API_KEY:+-e MINIMAX_API_KEY="$MINIMAX_API_KEY"} \
+        ${OPENAI_API_KEY:+-e OPENAI_API_KEY="$OPENAI_API_KEY"} \
         --name "$CONTAINER_NAME" \
         dealroom-v3-test:latest
     echo "Waiting 15s for container startup..."
@@ -65,12 +53,18 @@ run_test() {
     local section="$1"
     local name="$2"
     local cmd="$3"
+    local rc=0
     echo ""
     echo "━━━ $section $name ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     if [ -n "$cmd" ]; then
         eval "$cmd"
+        rc=$?
     else
         python3 "${SCRIPT_DIR}/test_${section}_${name}.py"
+        rc=$?
+    fi
+    if [ $rc -ne 0 ]; then
+        return $rc
     fi
     echo "✓ $section $name PASSED"
 }
@@ -83,7 +77,7 @@ run_section() {
     local name="$2"
     local cmd="$3"
 
-    if run_test "$num $name" "$cmd" 2>&1; then
+    if run_test "$num" "$name" "$cmd" 2>&1; then
         ((pass_count++))
     else
         echo "✗ $num $name FAILED"
@@ -99,7 +93,17 @@ echo "╔═══════════════════════�
 echo "║  DealRoom v3 — Comprehensive Test Suite                 ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
-echo "API Keys:  MINIMAX_API_KEY=***${MINIMAX_API_KEY: -4}  OPENAI_API_KEY=***${OPENAI_API_KEY: -4}"
+if [ -n "$MINIMAX_API_KEY" ]; then
+    MM_KEY="***${MINIMAX_API_KEY: -4}"
+else
+    MM_KEY="(not set)"
+fi
+if [ -n "$OPENAI_API_KEY" ]; then
+    OA_KEY="***${OPENAI_API_KEY: -4}"
+else
+    OA_KEY="(not set)"
+fi
+echo "API Keys:  MINIMAX_API_KEY=${MM_KEY}  OPENAI_API_KEY=${OA_KEY}"
 echo "Container: $CONTAINER_NAME"
 echo "Base URL:  $BASE_URL"
 echo ""
@@ -146,11 +150,11 @@ run_section "09" "full_episode_e2e" \
 
 # ── SECTION 10: Training Infrastructure (container) ────────────────────────────
 run_section "10" "training_infrastructure" \
-    "docker cp test_10_training_infrastructure.py $CONTAINER_NAME:/app/ && docker exec $CONTAINER_NAME python3 /app/test_10_training_infrastructure.py"
+    "python3 test_assertion_hygiene.py && docker cp test_10_training_infrastructure.py $CONTAINER_NAME:/app/ && docker cp test_10_training_integration.py $CONTAINER_NAME:/app/ && docker exec $CONTAINER_NAME python3 /app/test_10_training_infrastructure.py && docker exec $CONTAINER_NAME python3 /app/test_10_training_integration.py"
 
-# ── SECTION 11: All 12 Research Properties ─────────────────────────────────────
+# ── SECTION 11: All 12 Research Properties (container) ─────────────────────────
 run_section "11" "research_properties" \
-    "python3 test_11_research_properties.py"
+    "docker cp test_11_research_properties.py $CONTAINER_NAME:/app/ && docker exec $CONTAINER_NAME python3 /app/test_11_research_properties.py"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

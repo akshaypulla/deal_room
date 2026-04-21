@@ -26,6 +26,7 @@ if _dotenv.exists():
     except ImportError:
         pass
 
+import pytest
 import requests
 
 BASE_URL = os.getenv("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
@@ -58,7 +59,7 @@ def test_4_1_veto_precursor_before_veto():
     session = requests.Session()
     r = session.post(
         f"{BASE_URL}/reset",
-        json={"task": "hostile_acquisition", "seed": 10},
+        json={"task_id": "hostile_acquisition", "seed": 10},
         timeout=30,
     )
     session_id = r.json().get("metadata", {}).get("session_id")
@@ -99,7 +100,7 @@ def test_4_2_aligned_no_early_veto():
     print("\n[4.2] Aligned scenario does not veto immediately...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 20}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 20}, timeout=30
     )
     session_id = r.json().get("metadata", {}).get("session_id")
 
@@ -129,7 +130,7 @@ def test_4_3_veto_terminates_episode():
     session = requests.Session()
     r = session.post(
         f"{BASE_URL}/reset",
-        json={"task": "hostile_acquisition", "seed": 30},
+        json={"task_id": "hostile_acquisition", "seed": 30},
         timeout=30,
     )
     session_id = r.json().get("metadata", {}).get("session_id")
@@ -154,15 +155,62 @@ def test_4_3_veto_terminates_episode():
             print(f"  ✓ Episode terminated at step {steps}, terminal={terminal}")
             break
 
-    if not veto_confirmed:
-        print("  ⚠ Veto not triggered in 20 aggressive steps (may be stochastic)")
+    assert veto_confirmed, "Veto did not trigger in 20 aggressive hostile steps"
+
+
+def test_4_3_veto_deterministic():
+    """
+    Fixed-seed public API veto check. This must pass or fail, never skip.
+    """
+    print("\n[4.3b] Deterministic Legal veto fires by step 5...")
+    session = requests.Session()
+    r = session.post(
+        f"{BASE_URL}/reset",
+        json={"task_id": "hostile_acquisition", "seed": 42},
+        timeout=30,
+    )
+    assert r.status_code == 200, f"Reset failed: {r.status_code} {r.text}"
+    session_id = r.json().get("metadata", {}).get("session_id")
+    assert session_id, "Reset did not return a session id"
+
+    for i in range(5):
+        r = session.post(
+            f"{BASE_URL}/step",
+            json=make_action(
+                session_id,
+                "exec_escalation",
+                ["Legal"],
+                f"URGENT: Sign immediately or we withdraw. Attempt {i + 1}/5.",
+                [],
+                None,
+            ),
+            timeout=60,
+        )
+        assert r.status_code == 200, f"Step failed: {r.status_code} {r.text}"
+        result = r.json()
+        obs = result.get("observation", result)
+        if result.get("done", False) or obs.get("done", False):
+            info = result.get("info", {})
+            assert info.get("terminal_category") == "veto", (
+                f"Expected terminal_category='veto', got {info.get('terminal_category')}"
+            )
+            assert info.get("terminal_outcome") == "veto_by_Legal", (
+                f"Expected veto_by_Legal, got {info.get('terminal_outcome')}"
+            )
+            assert info.get("veto_stakeholder") == "Legal", (
+                f"Expected Legal veto, got {info.get('veto_stakeholder')}"
+            )
+            print(f"  ✓ Legal veto deterministically triggered on step {i + 1}")
+            return
+
+    pytest.fail("Legal veto did not fire after 5 fixed-seed aggressive actions")
 
 
 def test_4_4_timeout_terminates():
     print("\n[4.4] Timeout terminates episode...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 40}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 40}, timeout=30
     )
     obs_init = r.json()
     max_rounds = obs_init.get("max_rounds", 20)
@@ -196,17 +244,16 @@ def test_4_4_timeout_terminates():
 
 
 def test_4_5_scenario_difficulty_differentiation():
-    print("\n[4.5] Scenario difficulty: hostile > aligned...")
+    print("\n[4.5] Scenario difficulty: hostile reaches veto pressure earlier than aligned...")
 
-    def count_precursors(scenario, n=8):
+    def first_pressure_round(scenario, n=8):
         session = requests.Session()
         r = session.post(
-            f"{BASE_URL}/reset", json={"task": scenario, "seed": 50}, timeout=30
+            f"{BASE_URL}/reset", json={"task_id": scenario, "seed": 50}, timeout=30
         )
         session_id = r.json().get("metadata", {}).get("session_id")
-        precursors = 0
 
-        for _ in range(n):
+        for step in range(1, n + 1):
             r = session.post(
                 f"{BASE_URL}/step",
                 json={
@@ -219,25 +266,34 @@ def test_4_5_scenario_difficulty_differentiation():
                 },
                 timeout=60,
             )
-            obs = r.json().get("observation", r.json())
-            if r.json().get("done", False) or obs.get("done", False):
-                break
+            result = r.json()
+            obs = result.get("observation", result)
             if obs.get("veto_precursors"):
-                precursors += 1
+                return step
+            terminal = str(
+                result.get("terminal_outcome", "")
+                or result.get("info", {}).get("terminal_outcome", "")
+            )
+            if result.get("done", False) or obs.get("done", False):
+                if "veto" in terminal.lower():
+                    return step
+                break
 
-        return precursors
+        return n + 1
 
-    hostile_mean = sum(count_precursors("hostile_acquisition") for _ in range(3)) / 3
-    aligned_mean = sum(count_precursors("aligned") for _ in range(3)) / 3
+    hostile_mean = (
+        sum(first_pressure_round("hostile_acquisition") for _ in range(3)) / 3
+    )
+    aligned_mean = sum(first_pressure_round("aligned") for _ in range(3)) / 3
 
-    print(f"  hostile_acquisition: {hostile_mean:.2f} precursor rounds (avg)")
-    print(f"  aligned:            {aligned_mean:.2f} precursor rounds (avg)")
+    print(f"  hostile_acquisition: first pressure by round {hostile_mean:.2f} (avg)")
+    print(f"  aligned:             first pressure by round {aligned_mean:.2f} (avg)")
 
-    assert hostile_mean >= aligned_mean - 0.5, (
-        f"hostile_acquisition ({hostile_mean:.2f}) should produce >= precursors than aligned ({aligned_mean:.2f})"
+    assert hostile_mean <= aligned_mean, (
+        f"hostile_acquisition ({hostile_mean:.2f}) should reach veto pressure no later than aligned ({aligned_mean:.2f})"
     )
 
-    print("  ✓ Hostile scenario produces more veto pressure than aligned")
+    print("  ✓ Hostile scenario reaches veto pressure earlier than aligned")
 
 
 def test_4_6_veto_precursor_is_stakeholder_specific():
@@ -245,7 +301,7 @@ def test_4_6_veto_precursor_is_stakeholder_specific():
     session = requests.Session()
     r = session.post(
         f"{BASE_URL}/reset",
-        json={"task": "hostile_acquisition", "seed": 60},
+        json={"task_id": "hostile_acquisition", "seed": 60},
         timeout=30,
     )
     session_id = r.json().get("metadata", {}).get("session_id")
@@ -266,10 +322,8 @@ def test_4_6_veto_precursor_is_stakeholder_specific():
         if precursors:
             precursor_stakeholders.update(precursors.keys())
 
-    if precursor_stakeholders:
-        print(f"  ✓ Precursors tied to stakeholders: {precursor_stakeholders}")
-    else:
-        print("  ⚠ No precursors in this run (may be stochastic)")
+    assert precursor_stakeholders, "No stakeholder-specific precursors observed"
+    print(f"  ✓ Precursors tied to stakeholders: {precursor_stakeholders}")
 
 
 def test_4_7_cveto_not_just_eu():
@@ -284,7 +338,7 @@ def test_4_7_cveto_not_just_eu():
     session = requests.Session()
     r = session.post(
         f"{BASE_URL}/reset",
-        json={"task": "hostile_acquisition", "seed": 70},
+        json={"task_id": "hostile_acquisition", "seed": 70},
         timeout=30,
     )
     session_id = r.json().get("metadata", {}).get("session_id")
@@ -306,10 +360,8 @@ def test_4_7_cveto_not_just_eu():
                 veto_fired = True
             break
 
-    if veto_fired:
-        print("  ✓ CVaR veto fired in hostile scenario (EU may be positive)")
-    else:
-        print("  ⚠ No veto in this run (stochastic)")
+    assert veto_fired, "CVaR veto did not fire in fixed hostile scenario"
+    print("  ✓ CVaR veto fired in hostile scenario (EU may be positive)")
 
 
 def run_all():
@@ -321,6 +373,7 @@ def run_all():
         test_4_1_veto_precursor_before_veto,
         test_4_2_aligned_no_early_veto,
         test_4_3_veto_terminates_episode,
+        test_4_3_veto_deterministic,
         test_4_4_timeout_terminates,
         test_4_5_scenario_difficulty_differentiation,
         test_4_6_veto_precursor_is_stakeholder_specific,

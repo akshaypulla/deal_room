@@ -1,4 +1,4 @@
-"""Baseline inference script for DealRoom V2.5."""
+"""Baseline inference script for DealRoom v3."""
 
 from __future__ import annotations
 
@@ -10,13 +10,13 @@ from typing import Dict, List, Optional
 
 from openai import OpenAI
 
+from deal_room.environment.dealroom_v3 import DealRoomV3
 from models import DealRoomAction, DealRoomObservation
-from server.deal_room_environment import DealRoomEnvironment
 from server.grader import CCIGrader
 from deal_room.environment.llm_client import generate_stakeholder_response
 
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-BENCHMARK = "deal-room"
+BENCHMARK = "deal-room-v3"
 IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME") or os.getenv("IMAGE_NAME")
 
 ARTIFACT_MESSAGES = {
@@ -401,7 +401,23 @@ def maybe_generate_message(
         f"Message must be concise (2-4 sentences), credible, collaborative, role-aware."
     )
     context = f"vendor_message round {getattr(obs, 'round_number', '?')}"
-    result = generate_stakeholder_response(prompt=prompt, context=context)
+    client = get_client() if should_use_llm_messages() else None
+    result: Optional[str] = None
+    if client is not None:
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": MESSAGE_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+            )
+            result = response.choices[0].message.content
+        except Exception:
+            result = None
+    if result is None:
+        result = generate_stakeholder_response(prompt=prompt, context=context)
     if result is None:
         return None
     try:
@@ -413,7 +429,7 @@ def maybe_generate_message(
 
 
 def run_task(task_id: str, seed: int = 42) -> Dict[str, object]:
-    env = DealRoomEnvironment()
+    env = DealRoomV3()
     rewards: List[float] = []
     final_score = CCIGrader.MIN_SCORE
     success = False
@@ -443,7 +459,8 @@ def run_task(task_id: str, seed: int = 42) -> Dict[str, object]:
         )
         rewards.append(0.0)
     finally:
-        env.close()
+        if hasattr(env, "close"):
+            env.close()
         reward_str = ",".join(f"{value:.2f}" for value in rewards)
         print(
             f"[END] success={str(success).lower()} steps={step_num} score={final_score:.2f} rewards={reward_str}"

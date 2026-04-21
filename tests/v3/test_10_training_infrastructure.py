@@ -31,13 +31,7 @@ except Exception:
 
 def test_10_1_grpo_trainer_imports():
     print("\n[10.1] GRPOTrainer imports without error...")
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "grpo_trainer", "/app/env/deal_room/training/grpo_trainer.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    import deal_room.training.grpo_trainer as mod
 
     assert hasattr(mod, "GRPOTrainer"), "GRPOTrainer class not found"
     assert hasattr(mod, "TrainingMetrics"), "TrainingMetrics not found"
@@ -46,13 +40,7 @@ def test_10_1_grpo_trainer_imports():
 
 def test_10_2_training_metrics_fields():
     print("\n[10.2] TrainingMetrics has all required fields...")
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "grpo_trainer", "/app/env/deal_room/training/grpo_trainer.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    import deal_room.training.grpo_trainer as mod
 
     fields = list(mod.TrainingMetrics.__dataclass_fields__.keys())
     print(f"  Fields: {fields}")
@@ -73,13 +61,7 @@ def test_10_2_training_metrics_fields():
 
 def test_10_3_curriculum_generator_imports():
     print("\n[10.3] AdaptiveCurriculumGenerator imports and instantiates...")
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "adaptive_generator", "/app/env/deal_room/curriculum/adaptive_generator.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    import deal_room.curriculum.adaptive_generator as mod
 
     assert hasattr(mod, "AdaptiveCurriculumGenerator"), (
         "AdaptiveCurriculumGenerator not found"
@@ -114,13 +96,7 @@ def test_10_4_colab_notebook_exists():
 
 def test_10_5_training_loop_smoke_test():
     print("\n[10.5] Training loop smoke test — can initialize pipeline...")
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "grpo_trainer", "/app/env/deal_room/training/grpo_trainer.py"
-    )
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    import deal_room.training.grpo_trainer as mod
 
     Trainer = mod.GRPOTrainer
     assert hasattr(Trainer, "__init__"), "GRPOTrainer missing __init__"

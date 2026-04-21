@@ -47,10 +47,10 @@ def make_action(
 def test_5_1_different_seeds_different_initial_state():
     print("\n[5.1] Two resets with different seeds → different initial states...")
     r1 = requests.post(
-        f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 42}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 42}, timeout=30
     )
     r2 = requests.post(
-        f"{BASE_URL}/reset", json={"task": "conflicted", "seed": 43}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 43}, timeout=30
     )
 
     obs1, obs2 = r1.json(), r2.json()
@@ -69,7 +69,7 @@ def test_5_2_round_number_resets_to_zero():
     print("\n[5.2] round_number resets to 0 on reset...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 10}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 10}, timeout=30
     )
     session_id = r.json().get("metadata", {}).get("session_id")
 
@@ -89,7 +89,7 @@ def test_5_2_round_number_resets_to_zero():
 
     # Reset
     obs_after = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 11}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 11}, timeout=30
     ).json()
     assert obs_after.get("round_number", 999) == 0, (
         f"round_number after reset = {obs_after.get('round_number')} (expected 0)"
@@ -102,7 +102,7 @@ def test_5_3_done_false_after_reset():
     print("\n[5.3] done=False immediately after reset...")
     for scenario in ["aligned", "conflicted", "hostile_acquisition"]:
         r = requests.post(
-            f"{BASE_URL}/reset", json={"task": scenario, "seed": 20}, timeout=30
+            f"{BASE_URL}/reset", json={"task_id": scenario, "seed": 20}, timeout=30
         )
         obs = r.json()
         done = obs.get("done")
@@ -113,7 +113,7 @@ def test_5_3_done_false_after_reset():
 def test_5_4_engagement_history_initialized():
     print("\n[5.4] engagement_history initialized correctly...")
     r = requests.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 30}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 30}, timeout=30
     )
     obs = r.json()
     history = obs.get("engagement_history", [])
@@ -126,7 +126,7 @@ def test_5_5_round_number_increments_correctly():
     print("\n[5.5] round_number increments correctly...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 40}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 40}, timeout=30
     )
     session_id = r.json().get("metadata", {}).get("session_id")
 
@@ -159,7 +159,7 @@ def test_5_6_all_three_scenarios_work():
     for i, scenario in enumerate(["aligned", "conflicted", "hostile_acquisition"]):
         session = requests.Session()
         r = session.post(
-            f"{BASE_URL}/reset", json={"task": scenario, "seed": 50 + i}, timeout=30
+            f"{BASE_URL}/reset", json={"task_id": scenario, "seed": 50 + i}, timeout=30
         )
         obs = r.json()
         assert obs.get("done") is False, f"{scenario}: done=True after reset"
@@ -188,7 +188,7 @@ def test_5_7_same_session_same_state_across_steps():
     print("\n[5.7] Same session maintains consistent state across steps...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 60}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 60}, timeout=30
     )
     obs0 = r.json()
     session_id = obs0.get("metadata", {}).get("session_id")
@@ -232,7 +232,7 @@ def test_5_8_reset_clears_all_session_state():
     print("\n[5.8] Reset clears all session state...")
     session = requests.Session()
     r = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 70}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 70}, timeout=30
     )
     sid = r.json().get("metadata", {}).get("session_id")
 
@@ -253,7 +253,7 @@ def test_5_8_reset_clears_all_session_state():
 
     # Reset
     obs_after = session.post(
-        f"{BASE_URL}/reset", json={"task": "aligned", "seed": 71}, timeout=30
+        f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": 71}, timeout=30
     ).json()
 
     assert obs_after.get("round_number") == 0, "Round number not reset"
