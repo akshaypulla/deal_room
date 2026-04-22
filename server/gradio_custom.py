@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -14,6 +15,77 @@ from models import DealRoomAction, DealRoomObservation, DealRoomState
 from server.grader import CCIGrader
 from server.session_pool import DealRoomSessionPool
 from server.walkthrough_data import GUIDE_DATA
+
+_LLM_MODEL = None
+_LLM_TOKENIZER = None
+_LLM_MODEL_PATH = os.environ.get("DEALROOM_MODEL_PATH", "dealroom-qwen-3b-negotiation")
+
+
+def _get_llm_model_and_tokenizer():
+    global _LLM_MODEL, _LLM_TOKENIZER
+    if _LLM_MODEL is not None:
+        return _LLM_MODEL, _LLM_TOKENIZER
+
+    try:
+        import torch
+        from unsloth import FastLanguageModel
+    except ImportError:
+        return None, None
+
+    path = _LLM_MODEL_PATH
+    try:
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=path,
+            max_seq_length=512,
+            dtype=torch.float16,
+            load_in_4bit=True,
+        )
+    except Exception:
+        try:
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name="Qwen/Qwen2.5-3B-Instruct",
+                max_seq_length=512,
+                dtype=torch.float16,
+                load_in_4bit=True,
+            )
+        except Exception:
+            return None, None
+
+    FastLanguageModel.for_inference(model)
+    _LLM_MODEL = model
+    _LLM_TOKENIZER = tokenizer
+    return model, tokenizer
+
+
+def _build_llm_action_from_observation(
+    observation: Dict[str, Any], model, tokenizer
+) -> DealRoomAction:
+    from deal_room.environment.prompts import build_situation_prompt, parse_action_text
+
+    obs_obj = DealRoomObservation(**observation)
+    prompt = build_situation_prompt(obs_obj)
+    if not prompt:
+        return DealRoomAction(
+            action_type="direct_message",
+            target="all",
+            target_ids=[],
+            message="Let me think about the best approach here.",
+        )
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=120,
+        temperature=0.7,
+        do_sample=True,
+        pad_token_id=tokenizer.eos_token_id,
+    )
+    response = tokenizer.decode(
+        outputs[0][inputs["input_ids"].shape[1] :],
+        skip_special_tokens=True,
+    ).strip()
+    parsed = parse_action_text(response)
+    return parsed
+
 
 TASK_ORDER = ["aligned", "conflicted", "hostile_acquisition"]
 LEVEL_LABELS = {
@@ -623,6 +695,23 @@ CUSTOM_CSS = """
 .hidden {
     display: none !important;
 }
+.causal-graph-area {
+    margin-top: 10px;
+    padding: 8px;
+    background: #0d1117;
+    border-radius: 8px;
+    border: 1px solid #1f2937;
+}
+.causal-graph-area svg {
+    max-width: 100%;
+    height: auto;
+}
+.llm-agent-toggle {
+    margin-top: 8px;
+}
+.seed-preset-dropdown {
+    margin-top: 6px;
+}
 """
 
 
@@ -649,6 +738,9 @@ class DealRoomWebManager:
 
     def get_state_for_session(self, session_id: str) -> Dict[str, Any]:
         return self.pool.state(session_id).model_dump()
+
+    def get_beliefs_for_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        return self.pool.get_beliefs(session_id)
 
 
 def load_metadata() -> EnvironmentMetadata:
@@ -708,6 +800,8 @@ def build_custom_tab(
             "score_delta": None,
             "show_advanced": False,
             "round_complete": False,
+            "use_llm_agent": False,
+            "seed_preset": None,
         }
 
     def _escape(value: Any) -> str:
@@ -725,6 +819,10 @@ def build_custom_tab(
             merged["popup_queue"] = []
         if not isinstance(merged.get("unlocked_levels"), list):
             merged["unlocked_levels"] = ["simple"]
+        if "use_llm_agent" not in merged:
+            merged["use_llm_agent"] = False
+        if "seed_preset" not in merged:
+            merged["seed_preset"] = None
         return merged
 
     def _normalize_saved_runs(saved_runs: Any) -> List[Dict[str, Any]]:
@@ -1207,6 +1305,102 @@ def build_custom_tab(
             "</div>"
         )
 
+    def _build_causal_graph(view_state: Dict[str, Any]) -> str:
+        view_state = _normalize_view_state(view_state)
+        session_id = view_state.get("session_id")
+        if not session_id:
+            return (
+                "<div class='causal-graph-area'>Start a round to see belief graph</div>"
+            )
+
+        beliefs = web_manager.get_beliefs_for_session(session_id)
+        if not beliefs:
+            return "<div class='causal-graph-area'>No belief data yet</div>"
+
+        try:
+            import io
+            import matplotlib
+
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import networkx as nx
+        except Exception:
+            return "<div class='causal-graph-area'>Graph unavailable (networkx/matplotlib not installed)</div>"
+
+        G = nx.DiGraph()
+        stake_roles = {
+            "Finance": "finance",
+            "Legal": "legal_compliance",
+            "TechLead": "technical",
+            "Procurement": "procurement",
+            "Operations": "operations",
+            "ExecSponsor": "executive_sponsor",
+        }
+        role_icons = {
+            "finance": "💰",
+            "legal_compliance": "⚖️",
+            "technical": "🛠️",
+            "procurement": "📦",
+            "operations": "⚙️",
+            "executive_sponsor": "🎯",
+        }
+
+        for sid, belief_dist in beliefs.items():
+            if not hasattr(belief_dist, "distribution"):
+                continue
+            pos = belief_dist.positive_mass()
+            neg = belief_dist.negative_mass()
+            role = getattr(belief_dist, "stakeholder_role", sid)
+            icon = role_icons.get(role, "👤")
+            color = "#22c55e" if pos > neg else "#ef4444" if neg > pos else "#eab308"
+            G.add_node(sid, pos=pos, neg=neg, icon=icon, color=color)
+
+        state = view_state.get("current_state") or {}
+        edges = state.get("relationship_edges", [])
+        for edge in edges:
+            src = edge.get("from") or edge.get("source")
+            dst = edge.get("to") or edge.get("target")
+            if src and dst and src in G.nodes and dst in G.nodes:
+                G.add_edge(src, dst, weight=edge.get("strength", 0.5))
+
+        if G.number_of_nodes() == 0:
+            return "<div class='causal-graph-area'>Building belief graph...</div>"
+
+        fig, ax = plt.subplots(1, 1, figsize=(4, 3), dpi=80)
+        pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
+
+        node_colors = [G.nodes[n].get("color", "#6b7280") for n in G.nodes()]
+        nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=800, ax=ax)
+        nx.draw_networkx_labels(
+            G,
+            pos,
+            labels={n: G.nodes[n].get("icon", "") for n in G.nodes()},
+            font_size=12,
+            ax=ax,
+        )
+        edge_weights = [G[u][v].get("weight", 0.5) for u, v in G.edges()]
+        nx.draw_networkx_edges(
+            G,
+            pos,
+            edge_color=edge_weights,
+            width=[w * 2 for w in edge_weights],
+            alpha=0.6,
+            ax=ax,
+        )
+
+        ax.set_title("Belief Graph", fontsize=10)
+        ax.axis("off")
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="svg", bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        svg_data = buf.read().decode("utf-8")
+        buf.close()
+
+        return f"<div class='causal-graph-area'>{svg_data}</div>"
+
     def _build_how_it_works(view_state: Dict[str, Any]) -> str:
         view_state = _normalize_view_state(view_state)
         round_started = view_state.get("round_started", False)
@@ -1339,7 +1533,107 @@ def build_custom_tab(
             _build_score_panel(view_state),
             _build_signals(view_state),
             _build_why(view_state),
+            _build_causal_graph(view_state),
         )
+
+    def handle_llm_toggle_change(
+        use_llm: bool, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        updated = dict(view_state)
+        updated["use_llm_agent"] = use_llm
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+
+    def handle_seed_preset_change(
+        preset_value: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        updated = dict(view_state)
+        if preset_value:
+            parts = preset_value.split("/")
+            if len(parts) == 2:
+                updated["task"] = parts[0]
+                try:
+                    updated["seed"] = int(parts[1])
+                except ValueError:
+                    pass
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+
+    def handle_send_action_with_llm(
+        message: str,
+        use_llm: bool,
+        view_state: Dict[str, Any],
+        saved_runs: List[Dict[str, Any]],
+    ) -> Tuple[Any, ...]:
+        view_state = _normalize_view_state(view_state)
+        saved_runs = _normalize_saved_runs(saved_runs)
+        if not view_state.get("current_observation") or not view_state.get(
+            "session_id"
+        ):
+            updated = _run_reset(
+                "aligned", int(view_state.get("seed", 42)), "simple", view_state
+            )
+            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
+
+        if use_llm:
+            model, tokenizer = _get_llm_model_and_tokenizer()
+            if model is not None and tokenizer is not None:
+                try:
+                    action = _build_llm_action_from_observation(
+                        view_state["current_observation"], model, tokenizer
+                    )
+                except Exception:
+                    selected = view_state.get("selected_stakeholder", "all")
+                    action = DealRoomAction(
+                        action_type="direct_message",
+                        target=selected,
+                        target_ids=[selected] if selected != "all" else [],
+                        message=message or "Understood.",
+                    )
+            else:
+                selected = view_state.get("selected_stakeholder", "all")
+                action = DealRoomAction(
+                    action_type="direct_message",
+                    target=selected,
+                    target_ids=[selected] if selected != "all" else [],
+                    message=message or "Understood.",
+                )
+        else:
+            selected = view_state.get("selected_stakeholder", "all")
+            action = DealRoomAction(
+                action_type="direct_message",
+                target=selected,
+                target_ids=[selected] if selected != "all" else [],
+                message=message or "Understood.",
+            )
+        obs, reward, done, info, state = web_manager.step_session(
+            view_state["session_id"], action
+        )
+        updated = _record_step(
+            view_state, action, obs, reward, done, info, state.model_dump()
+        )
+        stakeholders = list(
+            updated["current_observation"].get("stakeholders", {}).keys()
+        )
+        current_selected = view_state.get("selected_stakeholder")
+        if current_selected not in stakeholders:
+            current_selected = stakeholders[0] if stakeholders else None
+        updated["selected_stakeholder"] = current_selected
+        updated["popup_index"] = 0
+        updated["popup_queue"] = (
+            [{"stakeholder_id": current_selected}] if current_selected else []
+        )
+        if updated.get("round_complete"):
+            updated["show_hint"] = False
+        else:
+            updated["show_hint"] = True
+            updated["hint_text"] = "Click a stakeholder to continue"
+        updated["selected_chip"] = None
+        updated["message_text"] = ""
+        saved_runs, updated = _save_run_if_complete(updated, saved_runs)
+        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
 
     def handle_start_round(
         level: str, view_state: Dict[str, Any], saved_runs: List[Dict[str, Any]]
@@ -1385,54 +1679,6 @@ def build_custom_tab(
         else:
             updated["show_hint"] = True
             updated["hint_text"] = "Click a stakeholder to see their response"
-        updated["selected_chip"] = None
-        updated["message_text"] = ""
-        saved_runs, updated = _save_run_if_complete(updated, saved_runs)
-        return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
-
-    def handle_send_action(
-        message: str,
-        view_state: Dict[str, Any],
-        saved_runs: List[Dict[str, Any]],
-    ) -> Tuple[Any, ...]:
-        view_state = _normalize_view_state(view_state)
-        saved_runs = _normalize_saved_runs(saved_runs)
-        if not view_state.get("current_observation") or not view_state.get(
-            "session_id"
-        ):
-            updated = _run_reset(
-                "aligned", int(view_state.get("seed", 42)), "simple", view_state
-            )
-            return (updated, saved_runs) + _render_all_outputs(updated, saved_runs)
-        selected = view_state.get("selected_stakeholder", "all")
-        action = DealRoomAction(
-            action_type="direct_message",
-            target=selected,
-            target_ids=[selected] if selected != "all" else [],
-            message=message or "Understood.",
-        )
-        obs, reward, done, info, state = web_manager.step_session(
-            view_state["session_id"], action
-        )
-        updated = _record_step(
-            view_state, action, obs, reward, done, info, state.model_dump()
-        )
-        stakeholders = list(
-            updated["current_observation"].get("stakeholders", {}).keys()
-        )
-        current_selected = view_state.get("selected_stakeholder")
-        if current_selected not in stakeholders:
-            current_selected = stakeholders[0] if stakeholders else None
-        updated["selected_stakeholder"] = current_selected
-        updated["popup_index"] = 0
-        updated["popup_queue"] = (
-            [{"stakeholder_id": current_selected}] if current_selected else []
-        )
-        if updated.get("round_complete"):
-            updated["show_hint"] = False
-        else:
-            updated["show_hint"] = True
-            updated["hint_text"] = "Click a stakeholder to continue"
         updated["selected_chip"] = None
         updated["message_text"] = ""
         saved_runs, updated = _save_run_if_complete(updated, saved_runs)
@@ -1649,11 +1895,35 @@ def build_custom_tab(
                             stop_btn = gr.Button(
                                 "⏹ Stop", elem_classes=["auto-btn", "stop-btn"]
                             )
+                        llm_agent_toggle = gr.Checkbox(
+                            label="🤖 Use LLM Agent (auto-negotiate)",
+                            value=False,
+                            elem_classes=["llm-agent-toggle"],
+                        )
+                        seed_preset_dropdown = gr.Dropdown(
+                            label="Seed Preset (Quick Start)",
+                            choices=[
+                                "hostile_acquisition/7",
+                                "hostile_acquisition/13",
+                                "hostile_acquisition/42",
+                                "hostile_acquisition/99",
+                                "aligned/7",
+                                "aligned/42",
+                                "aligned/99",
+                                "conflicted/13",
+                                "conflicted/42",
+                                "conflicted/99",
+                            ],
+                            value=None,
+                            interactive=True,
+                            elem_classes=["seed-preset-dropdown"],
+                        )
 
             with gr.Column(elem_classes=["right-panel"]):
                 score_html = gr.HTML()
                 signals_html = gr.HTML()
                 why_html = gr.HTML()
+                causal_graph_html = gr.HTML()
 
         outputs = [
             view_state,
@@ -1671,6 +1941,7 @@ def build_custom_tab(
             score_html,
             signals_html,
             why_html,
+            causal_graph_html,
         ]
 
         def render_initial(vs, sr):
@@ -1721,8 +1992,20 @@ def build_custom_tab(
         )
 
         send_btn.click(
-            fn=handle_send_action,
-            inputs=[message_input, view_state, saved_runs],
+            fn=handle_send_action_with_llm,
+            inputs=[message_input, llm_agent_toggle, view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        llm_agent_toggle.change(
+            fn=handle_llm_toggle_change,
+            inputs=[llm_agent_toggle, view_state, saved_runs],
+            outputs=outputs,
+        )
+
+        seed_preset_dropdown.change(
+            fn=handle_seed_preset_change,
+            inputs=[seed_preset_dropdown, view_state, saved_runs],
             outputs=outputs,
         )
 

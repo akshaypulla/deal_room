@@ -1,7 +1,7 @@
 """
-DealRoom v3 — MiniMax LLM Client.
+DealRoom v3 — GPT-4o-mini LLM Client.
 
-Single API: MiniMax M2.5 via curl, Anthropic-compatible /v1/messages endpoint.
+Single API: GPT-4o-mini via OpenAI SDK.
 No fallback. No JSON scoring.
 """
 
@@ -9,7 +9,6 @@ import os
 import sys
 import time
 import json
-import subprocess
 import threading
 from typing import Optional, Dict, Any, Tuple
 from dataclasses import dataclass, field
@@ -174,22 +173,24 @@ def classify_error(
     return make(LLMErrorType.UNKNOWN, f"Unknown error: {raw}")
 
 
-def get_minimax_client() -> Tuple[Any, str]:
-    key = os.environ.get("MINIMAX_API_KEY")
-    model = os.environ.get("MINIMAX_MODEL", "MiniMax-Text-01")
+def get_openai_client() -> Tuple[Any, str]:
+    key = os.environ.get("OPENAI_API_KEY")
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     if not key:
         return None, model
-    from openai import OpenAI
-
-    base_url = os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.chat/v1")
-    return OpenAI(api_key=key, base_url=base_url), model
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None, model
+    client = OpenAI(api_key=key, max_retries=0)
+    return client, model
 
 
 @dataclass
 class RetryPolicy:
     max_auto_retries: int = 3
-    base_backoff_sec: float = 1.0
-    max_backoff_sec: float = 30.0
+    base_backoff_sec: float = 2.0
+    max_backoff_sec: float = 60.0
     backoff_factor: float = 2.0
     jitter_fraction: float = 0.2
     rate_limit_default_wait: float = 60.0
@@ -209,8 +210,8 @@ DEFAULT_POLICY = RetryPolicy()
 
 class LLMCallStats:
     def __init__(self):
-        self.calls: Dict[str, int] = {"minimax": 0}
-        self.successes: Dict[str, int] = {"minimax": 0}
+        self.calls: Dict[str, int] = {"gpt4o-mini": 0}
+        self.successes: Dict[str, int] = {"gpt4o-mini": 0}
         self.auto_retried: int = 0
         self.interventions: int = 0
         self.skipped: int = 0
@@ -239,7 +240,7 @@ class LLMCallStats:
         print(f"{'─' * 52}")
         total = sum(self.calls.values())
         succ = sum(self.successes.values())
-        print(f"  MiniMax calls:       {self.calls.get('minimax', 0):>4}")
+        print(f"  GPT-4o-mini calls:   {self.calls.get('gpt4o-mini', 0):>4}")
         print(f"  Total:               {total:>4}   (success: {succ})")
         if self.auto_retried:
             print(f"  Auto-retried:        {self.auto_retried:>4}")
@@ -284,8 +285,8 @@ def _interactive_pause(error: LLMError, context: str, allow_skip: bool = True) -
         print(
             f"{YELLOW}  Authentication failed. Fix your API key, then press c.{RESET}"
         )
-        print(f"  Current: {_get_key_source('MINIMAX_API_KEY')}")
-        print(f"  Fix:     export MINIMAX_API_KEY=your_new_key\n")
+        print(f"  Current: {_get_key_source('OPENAI_API_KEY')}")
+        print(f"  Fix:     export OPENAI_API_KEY=your_new_key\n")
     elif error.is_rate_limit():
         print(f"{YELLOW}  Rate/quota limit hit.{RESET}")
         if error.retry_after:
@@ -336,7 +337,7 @@ def _interactive_pause(error: LLMError, context: str, allow_skip: bool = True) -
             print(f"  {YELLOW}Skipped. Caller uses fallback.{RESET}\n")
             return "skip"
         if choice in ("e", "exit", "quit", "q"):
-            print(f"  {RED}Exiting.{RESET}")
+            print(f"{RED}Exiting.{RESET}")
             sys.exit(0)
 
         allowed = "c, w <N>, r, s, e" if allow_skip else "c, w <N>, r, e"
@@ -382,17 +383,6 @@ def _countdown_sleep(seconds: float):
     print(" " * 30, end="\r")
 
 
-def _strip_json_fences(text: str) -> str:
-    s = text.strip()
-    for fence in ("```json", "```"):
-        if s.startswith(fence):
-            s = s[len(fence) :]
-    for fence in ("```",):
-        if s.endswith(fence):
-            s = s[: -len(fence)]
-    return s.strip()
-
-
 def llm_call_text(
     prompt: str,
     call_type: str,
@@ -402,8 +392,8 @@ def llm_call_text(
     policy: RetryPolicy = DEFAULT_POLICY,
     timeout: float = 30.0,
 ) -> Optional[str]:
-    if not os.environ.get("MINIMAX_API_KEY"):
-        STATS.record("minimax", skip=True)
+    if not os.environ.get("OPENAI_API_KEY"):
+        STATS.record("gpt4o-mini", skip=True)
         return None
 
     max_tokens_val = MAX_TOKENS[call_type]
@@ -415,62 +405,24 @@ def llm_call_text(
     }
 
     while True:
-        key = os.environ.get("MINIMAX_API_KEY", "")
-        base_url = os.environ.get(
-            "MINIMAX_BASE_URL", "https://api.minimax.io/anthropic/v1"
-        )
-        model = os.environ.get("MINIMAX_MODEL", "MiniMax-M2.5")
+        key = os.environ.get("OPENAI_API_KEY", "")
+        model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
-        STATS.record("minimax")
+        STATS.record("gpt4o-mini")
         try:
-            payload = json.dumps(
-                {
-                    "model": model,
-                    "max_tokens": max_tokens_val,
-                    "temperature": temperature,
-                    "messages": [{"role": "user", "content": prompt}],
-                }
+            from openai import OpenAI
+
+            client = OpenAI(api_key=key, timeout=timeout, max_retries=0)
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens_val,
+                temperature=temperature,
             )
-            result = subprocess.run(
-                [
-                    "curl",
-                    "-s",
-                    "-X",
-                    "POST",
-                    f"{base_url}/messages",
-                    "-H",
-                    f"Authorization: Bearer {key}",
-                    "-H",
-                    "Content-Type: application/json",
-                    "-H",
-                    "anthropic-version: 2023-06-01",
-                    "-d",
-                    payload,
-                    "--max-time",
-                    str(int(timeout)),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=int(timeout) + 5,
-            )
-
-            if result.returncode != 0:
-                stderr = result.stderr.strip()
-                if any(k in stderr for k in ["timeout", "timed out"]):
-                    raise TimeoutError(f"curl timed out: {stderr}")
-                raise RuntimeError(f"curl failed (rc={result.returncode}): {stderr}")
-
-            data = json.loads(result.stdout)
-            content_blocks = data.get("content", [])
-            text_parts = []
-            for block in content_blocks:
-                if block.get("type") == "text" and block.get("text", "").strip():
-                    text_parts.append(block["text"])
-            text = " ".join(text_parts) if text_parts else ""
-
+            text = response.choices[0].message.content
             if not text or not text.strip():
                 raise ValueError("Empty response")
-            STATS.record("minimax", success=True)
+            STATS.record("gpt4o-mini", success=True)
             return text.strip()
 
         except Exception as raw_exc:
@@ -481,44 +433,44 @@ def llm_call_text(
                 and raw_exc.response is not None
             ):
                 sc = raw_exc.response.status_code
-            err = classify_error(raw_exc, sc, api="minimax")
+            err = classify_error(raw_exc, sc, api="gpt4o-mini")
 
             print(
                 f"{DIM}  [{datetime.now().strftime('%H:%M:%S')}] "
-                f"[minimax/{call_type}] {err.error_type.value}{RESET}",
+                f"[gpt4o-mini/{call_type}] {err.error_type.value}{RESET}",
                 flush=True,
             )
-            STATS.record("minimax", error=err.error_type)
+            STATS.record("gpt4o-mini", error=err.error_type)
 
             if err.is_auth_error():
                 if not interactive:
-                    STATS.record("minimax", skip=True)
+                    STATS.record("gpt4o-mini", skip=True)
                     return None
                 action = _interactive_pause(err, context, allow_skip)
                 STATS.record_intervention()
                 if action == "skip":
-                    STATS.record("minimax", skip=True)
+                    STATS.record("gpt4o-mini", skip=True)
                     return None
                 continue
 
             if err.is_rate_limit():
                 if err.error_type == LLMErrorType.QUOTA_EXCEEDED:
                     if not interactive:
-                        STATS.record("minimax", skip=True)
+                        STATS.record("gpt4o-mini", skip=True)
                         return None
                     action = _interactive_pause(err, context, allow_skip)
                     STATS.record_intervention()
                     if action == "skip":
-                        STATS.record("minimax", skip=True)
+                        STATS.record("gpt4o-mini", skip=True)
                         return None
                     continue
                 wait = min(
                     err.retry_after or policy.rate_limit_default_wait,
                     policy.rate_limit_max_wait,
                 )
-                _print_rate_wait(wait, context, "minimax")
+                _print_rate_wait(wait, context, "gpt4o-mini")
                 _countdown_sleep(wait)
-                STATS.record("minimax", retry=True)
+                STATS.record("gpt4o-mini", retry=True)
                 attempt += 1
                 continue
 
@@ -528,18 +480,18 @@ def llm_call_text(
                     err, context, attempt, backoff, policy.max_auto_retries
                 )
                 time.sleep(backoff)
-                STATS.record("minimax", retry=True)
+                STATS.record("gpt4o-mini", retry=True)
                 attempt += 1
                 continue
 
             if not interactive:
-                STATS.record("minimax", skip=True)
+                STATS.record("gpt4o-mini", skip=True)
                 return None
 
             action = _interactive_pause(err, context, allow_skip)
             STATS.record_intervention()
             if action == "skip":
-                STATS.record("minimax", skip=True)
+                STATS.record("gpt4o-mini", skip=True)
                 return None
             attempt = 0
             continue
@@ -570,24 +522,24 @@ def generate_deliberation_summary(
 
 
 def validate_api_keys():
-    return bool(os.environ.get("MINIMAX_API_KEY"))
+    return bool(os.environ.get("OPENAI_API_KEY"))
 
 
 USAGE = """
 DealRoom v3 — API Configuration
 
-API:   MiniMax M2.5
+API:   GPT-4o-mini
 
 REQUIRED:
-  export MINIMAX_API_KEY=your_minimax_key
+  export OPENAI_API_KEY=your_openai_key
 
 OPTIONAL OVERRIDES:
-  export MINIMAX_BASE_URL=https://api.minimax.io/anthropic/v1  (default)
-  export MINIMAX_MODEL=MiniMax-M2.5                           (default)
+  export OPENAI_MODEL=gpt-4o-mini                        (default)
+  export OPENAI_API_KEY=your_key                          (required)
 
 CALL ROUTING:
-  generate_stakeholder_response() -> MiniMax (text output)
-  generate_deliberation_summary() -> MiniMax (text output)
+  generate_stakeholder_response() -> GPT-4o-mini (text output)
+  generate_deliberation_summary()  -> GPT-4o-mini (text output)
 """
 
 

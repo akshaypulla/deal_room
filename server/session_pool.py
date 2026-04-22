@@ -81,6 +81,14 @@ class DealRoomSessionPool:
             entry.last_access = time.time()
             return entry.env._state
 
+    def get_beliefs(self, session_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            entry = self._sessions.get(session_id)
+            if entry is None:
+                return None
+            entry.last_access = time.time()
+            return entry.env._beliefs
+
     def has_session(self, session_id: Optional[str]) -> bool:
         if not session_id:
             return False

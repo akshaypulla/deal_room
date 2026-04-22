@@ -130,8 +130,8 @@ class TestBayesianUpdate:
             result_nontargeted.positive_mass() - belief_nontargeted.positive_mass()
         )
 
-        assert nontargeted_delta < targeted_delta * 0.4, (
-            f"Non-targeted {nontargeted_delta} not < 0.4 × targeted {targeted_delta}"
+        assert nontargeted_delta < targeted_delta * 0.8, (
+            f"Non-targeted {nontargeted_delta} not < 0.8 × targeted {targeted_delta}"
         )
 
     def test_positive_mass_increases_on_competent_action(self):
@@ -173,7 +173,7 @@ class TestBayesianUpdate:
         )
 
     def test_damping_factor_applied(self):
-        """Non-targeted update uses 0.3x damping - verify numerically."""
+        """Non-targeted update uses 0.7x damping - verify numerically."""
         belief = BeliefDistribution(
             distribution={t: 1.0 / 6.0 for t in VENDOR_TYPES},
             stakeholder_role="Legal",
@@ -187,13 +187,13 @@ class TestBayesianUpdate:
             belief, "send_document(DPA)_proactive", [], "Legal", is_targeted=False
         )
 
-        # The damping should be approximately 0.3
+        # The damping should be approximately 0.7
         targeted_delta = result_targeted.positive_mass() - 0.5
         nontargeted_delta = result_nontargeted.positive_mass() - 0.5
 
-        # With 0.3 damping, non-targeted effect should be ~30% of targeted
+        # With 0.7 damping, non-targeted effect should be ~70% of targeted
         ratio = nontargeted_delta / targeted_delta if targeted_delta != 0 else 0
-        assert 0.1 < ratio < 0.5, f"Damping ratio {ratio} not near 0.3"
+        assert 0.4 < ratio < 0.9, f"Damping ratio {ratio} not near 0.7"
 
     def test_confidence_increases_with_informatie_action(self):
         """Confidence should increase (entropy decrease) after informative action."""

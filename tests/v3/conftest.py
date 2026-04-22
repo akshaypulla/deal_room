@@ -8,14 +8,19 @@ import sys
 from pathlib import Path
 
 # Attempt to load .env file if it exists
-_dotenv_path = Path(__file__).parent.parent.parent / ".env"
-if _dotenv_path.exists():
-    try:
-        from dotenv import load_dotenv
+_dotenv_paths = [
+    Path(__file__).parent / ".env",  # tests/v3/.env (primary)
+    Path(__file__).parent.parent.parent / ".env",  # project_root/.env
+]
+for _dotenv_path in _dotenv_paths:
+    if _dotenv_path.exists():
+        try:
+            from dotenv import load_dotenv
 
-        load_dotenv(_dotenv_path)
-    except ImportError:
-        pass  # dotenv not installed — rely on exported env vars
+            load_dotenv(_dotenv_path)
+            break
+        except ImportError:
+            pass
 
 BASE_URL = os.getenv("DEALROOM_BASE_URL", "http://127.0.0.1:7860")
 CONTAINER_NAME = os.getenv("DEALROOM_CONTAINER_NAME", "dealroom-v3-test")

@@ -16,8 +16,13 @@ from deal_room.rewards.utterance_scorer import (
     LOG2_6,
     LOOKAHEAD_COST,
 )
-from deal_room.committee.causal_graph import BeliefDistribution
+from deal_room.committee.causal_graph import (
+    BeliefDistribution,
+    CausalGraph,
+    get_betweenness_centrality,
+)
 from deal_room.stakeholders.cvar_preferences import StakeholderRiskProfile
+from models import DealRoomAction
 
 
 def make_belief(
@@ -52,24 +57,42 @@ def make_profile(lambda_risk=0.5, alpha=0.2, tau=0.8):
     )
 
 
+class MockState:
+    def __init__(
+        self,
+        beliefs=None,
+        active_blockers=None,
+        risk_profiles=None,
+        authority_weights=None,
+        current_terms=None,
+        deal_stage="evaluation",
+    ):
+        self.beliefs = beliefs or {}
+        self.active_blockers = active_blockers or []
+        self.risk_profiles = risk_profiles or {}
+        self.authority_weights = authority_weights or {}
+        self.current_terms = current_terms or {"price": 100000, "timeline_weeks": 12}
+        self.deal_stage = deal_stage
+
+
 class MockGraph:
     def __init__(self):
         self.nodes = ["A", "B", "C"]
-        self.edges = [("A", "B"), ("B", "C")]
+        self.edges = {("A", "B"): 1.0, ("B", "C"): 1.0}
         self.authority_weights = {"A": 0.4, "B": 0.3, "C": 0.3}
 
     def get_outgoing(self, stakeholder):
         result = {}
-        for src, dst in self.edges:
+        for (src, dst), w in self.edges.items():
             if src == stakeholder:
-                result[dst] = 1.0
+                result[dst] = w
         return result
 
     def get_influencers(self, stakeholder):
         result = {}
-        for src, dst in self.edges:
+        for (src, dst), w in self.edges.items():
             if dst == stakeholder:
-                result[src] = 1.0
+                result[src] = w
         return result
 
 
@@ -88,18 +111,19 @@ def test_lookahead_penalty_applied():
     b_before = {"Legal": make_belief(competent=0.3)}
     b_after = {"Legal": make_belief(competent=0.35)}
 
+    state_before = MockState(beliefs=b_before)
+    state_after = MockState(beliefs=b_after)
+
+    action = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
+
     scorer = UtteranceScorer()
     score_no_look = scorer.score(
-        beliefs_before=b_before,
-        beliefs_after=b_after,
-        graph=MockGraph(),
-        lookahead_used=False,
+        action, state_before, state_after, MockGraph(), lookahead_used=False
     )
     score_look = scorer.score(
-        beliefs_before=b_before,
-        beliefs_after=b_after,
-        graph=MockGraph(),
-        lookahead_used=True,
+        action, state_before, state_after, MockGraph(), lookahead_used=True
     )
 
     assert score_look.lookahead_used == True
@@ -116,18 +140,24 @@ def test_lookahead_penalty_applied():
 def test_all_dimensions_bounded_0_1():
     b_before = {"Legal": make_belief(0.3)}
     b_after = {"Legal": make_belief(0.35)}
-    graph = MockGraph()
+
+    state_before = MockState(
+        beliefs=b_before,
+        risk_profiles={"Legal": make_profile(lambda_risk=0.6)},
+        authority_weights={"Legal": 0.5},
+        current_terms={"price": 100000, "timeline_weeks": 12},
+    )
+    state_after = MockState(beliefs=b_after)
+
+    action = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
+
     scorer = UtteranceScorer()
 
     for _ in range(20):
         score = scorer.score(
-            beliefs_before=b_before,
-            beliefs_after=b_after,
-            graph=graph,
-            targeted_ids=["Legal"],
-            risk_profiles={"Legal": make_profile(lambda_risk=0.6)},
-            deal_terms={"price": 100000, "timeline_weeks": 12},
-            authority_weights={"Legal": 0.5},
+            action, state_before, state_after, MockGraph(), lookahead_used=False
         )
         for dim in ["goal", "trust", "information", "risk", "causal"]:
             val = getattr(score, dim)
@@ -149,18 +179,21 @@ def test_goal_score_increases_with_approval():
         "Finance": make_belief(competent=0.1, trustworthy=0.1, aligned=0.05),
     }
 
-    scorer = UtteranceScorer()
-    s_pos = scorer.score(
-        b_before,
-        b_after_positive,
-        graph=MockGraph(),
+    state_before = MockState(
+        beliefs=b_before,
         authority_weights={"Legal": 0.5, "Finance": 0.5},
     )
+
+    action = DealRoomAction(
+        action_type="send_document", target="all", target_ids=["Legal", "Finance"]
+    )
+
+    scorer = UtteranceScorer()
+    s_pos = scorer.score(
+        action, state_before, MockState(beliefs=b_after_positive), MockGraph()
+    )
     s_neg = scorer.score(
-        b_before,
-        b_after_negative,
-        graph=MockGraph(),
-        authority_weights={"Legal": 0.5, "Finance": 0.5},
+        action, state_before, MockState(beliefs=b_after_negative), MockGraph()
     )
 
     assert s_pos.goal > s_neg.goal, (
@@ -184,16 +217,27 @@ def test_trust_targeted_delta():
         "Finance": make_belief(trustworthy=0.4),
     }
 
+    state_before = MockState(beliefs=b_before)
+    action_targeted = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
+    action_untargeted = DealRoomAction(
+        action_type="send_document", target="Finance", target_ids=["Finance"]
+    )
+
     scorer = UtteranceScorer()
     s = scorer.score(
-        b_before, b_after_targeted, graph=MockGraph(), targeted_ids=["Legal"]
+        action_targeted, state_before, MockState(beliefs=b_after_targeted), MockGraph()
     )
     assert s.trust > 0.5, f"targeted trust should increase, got {s.trust}"
 
     s2 = scorer.score(
-        b_before, b_after_untargeted, graph=MockGraph(), targeted_ids=["Legal"]
+        action_targeted,
+        state_before,
+        MockState(beliefs=b_after_untargeted),
+        MockGraph(),
     )
-    assert s2.trust == 0.5, f"untargeted stakeholding should get 0.5, got {s2.trust}"
+    assert s2.trust == 0.5, f"untargeted stakeholder should get 0.5, got {s2.trust}"
     print(
         f"  ✓ trust for targeted stakeholder increased: {s.trust:.3f} (untargeted: {s2.trust})"
     )
@@ -229,9 +273,17 @@ def test_information_entropy_reduction():
     b_after_moderate = {"Legal": moderately_certain}
     b_after_high = {"Legal": highly_certain}
 
+    state_before = MockState(beliefs=b_before_uniform)
+    action = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
     scorer = UtteranceScorer()
-    s_moderate = scorer.score(b_before_uniform, b_after_moderate, graph=MockGraph())
-    s_high = scorer.score(b_before_uniform, b_after_high, graph=MockGraph())
+    s_moderate = scorer.score(
+        action, state_before, MockState(beliefs=b_after_moderate), MockGraph()
+    )
+    s_high = scorer.score(
+        action, state_before, MockState(beliefs=b_after_high), MockGraph()
+    )
 
     assert s_moderate.information > 0.5, (
         f"entropy reduction should give >0.5, got {s_moderate.information}"
@@ -247,11 +299,15 @@ def test_information_entropy_reduction():
 def test_determinism_consistency():
     b_before = {"Legal": make_belief(competent=0.3)}
     b_after = {"Legal": make_belief(competent=0.35)}
+    state_before = MockState(beliefs=b_before)
+    action = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
     scorer = UtteranceScorer()
 
     scores = []
     for _ in range(10):
-        s = scorer.score(b_before, b_after, graph=MockGraph(), targeted_ids=["Legal"])
+        s = scorer.score(action, state_before, MockState(beliefs=b_after), MockGraph())
         scores.append((s.goal, s.trust, s.information, s.risk, s.causal))
 
     for i in range(1, len(scores)):
@@ -274,10 +330,14 @@ def test_prediction_accuracy():
 def test_scorer_reset():
     b_before = {"Legal": make_belief(competent=0.2)}
     b_after = {"Legal": make_belief(competent=0.35)}
+    state_before = MockState(beliefs=b_before)
+    action = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
     scorer = UtteranceScorer()
 
-    s1 = scorer.score(b_before, b_after, graph=MockGraph(), targeted_ids=["Legal"])
-    s2 = scorer.score(b_before, b_after, graph=MockGraph(), targeted_ids=["Legal"])
+    s1 = scorer.score(action, state_before, MockState(beliefs=b_after), MockGraph())
+    s2 = scorer.score(action, state_before, MockState(beliefs=b_after), MockGraph())
     assert s1.trust == s2.trust, "reset should not affect stateless scorer"
     print("  ✓ scorer reset (no state accumulated in stateless scorer)")
 
@@ -285,12 +345,21 @@ def test_scorer_reset():
 def test_risk_cvar_no_profile_returns_0_5():
     b_before = {"Legal": make_belief()}
     b_after = {"Legal": make_belief(competent=0.35)}
+    state_before = MockState(beliefs=b_before, risk_profiles=None)
+    action = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
     scorer = UtteranceScorer()
 
     s_no_profile = scorer.score(
-        b_before, b_after, graph=MockGraph(), risk_profiles=None
+        action, state_before, MockState(beliefs=b_after), MockGraph()
     )
-    s_empty = scorer.score(b_before, b_after, graph=MockGraph(), risk_profiles={})
+    s_empty = scorer.score(
+        action,
+        MockState(beliefs=b_before, risk_profiles={}),
+        MockState(beliefs=b_after),
+        MockGraph(),
+    )
     assert s_no_profile.risk == 0.5, (
         f"no risk profiles should give 0.5, got {s_no_profile.risk}"
     )
@@ -303,9 +372,13 @@ def test_risk_cvar_no_profile_returns_0_5():
 def test_causal_no_targets_returns_0():
     b_before = {"Legal": make_belief()}
     b_after = {"Legal": make_belief(competent=0.35)}
+    state_before = MockState(beliefs=b_before)
+    action = DealRoomAction(action_type="send_document", target="all", target_ids=[])
     scorer = UtteranceScorer()
 
-    s_no_target = scorer.score(b_before, b_after, graph=MockGraph(), targeted_ids=[])
+    s_no_target = scorer.score(
+        action, state_before, MockState(beliefs=b_after), MockGraph()
+    )
     assert s_no_target.causal == 0.0, (
         f"no targets should give causal=0, got {s_no_target.causal}"
     )
@@ -321,21 +394,22 @@ def test_blocker_resolution_affects_goal():
     blockers_after_same = list(blockers_before)
 
     b = {"Legal": make_belief(competent=0.3)}
+    action = DealRoomAction(
+        action_type="send_document", target="Legal", target_ids=["Legal"]
+    )
     scorer = UtteranceScorer()
 
     s_resolved = scorer.score(
-        b,
-        b,
-        graph=MockGraph(),
-        active_blockers_before=blockers_before,
-        active_blockers_after=blockers_after_resolved,
+        action,
+        MockState(beliefs=b, active_blockers=blockers_before),
+        MockState(beliefs=b, active_blockers=blockers_after_resolved),
+        MockGraph(),
     )
     s_same = scorer.score(
-        b,
-        b,
-        graph=MockGraph(),
-        active_blockers_before=blockers_before,
-        active_blockers_after=blockers_after_same,
+        action,
+        MockState(beliefs=b, active_blockers=blockers_before),
+        MockState(beliefs=b, active_blockers=blockers_after_same),
+        MockGraph(),
     )
 
     assert s_resolved.goal > s_same.goal, (

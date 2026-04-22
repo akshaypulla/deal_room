@@ -1,11 +1,11 @@
 """Shared environment constants for DealRoom v3."""
 
 REWARD_WEIGHTS = {
-    "goal": 0.25,
-    "trust": 0.20,
-    "info": 0.20,
-    "risk": 0.20,
-    "causal": 0.15,
+    "goal": 0.30,
+    "trust": 0.18,
+    "info": 0.18,
+    "risk": 0.17,
+    "causal": 0.17,
 }
 
 TERMINAL_REWARDS = {

@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple
 from .causal_graph import BeliefDistribution, VENDOR_TYPES
 
 
-LOG2_6 = math.log(2, 6)
+LOG2_6 = math.log(6) / math.log(2)
 
 ACTION_LIKELIHOODS = {
     "send_document(DPA)_proactive": {
@@ -111,7 +111,7 @@ def bayesian_update(
     is_targeted: bool,
 ) -> BeliefDistribution:
     likelihoods = _get_likelihood(action_type, documents, stakeholder_role)
-    damping = 1.0 if is_targeted else 0.3
+    damping = 1.0 if is_targeted else 0.7
 
     new_dist = {}
     for vendor_type, prior_prob in belief.distribution.items():

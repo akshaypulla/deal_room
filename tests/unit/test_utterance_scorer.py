@@ -270,7 +270,7 @@ class TestUtteranceScore:
         """weighted_sum returns correct scalar reward."""
         score = UtteranceScore(goal=0.8, trust=0.6, info=0.7, risk=0.5, causal=0.4)
         result = score.weighted_sum(REWARD_WEIGHTS)
-        expected = 0.25 * 0.8 + 0.20 * 0.6 + 0.20 * 0.7 + 0.20 * 0.5 + 0.15 * 0.4
+        expected = 0.30 * 0.8 + 0.18 * 0.6 + 0.18 * 0.7 + 0.17 * 0.5 + 0.17 * 0.4
         assert abs(result - expected) < 1e-9
 
     def test_to_dict(self):

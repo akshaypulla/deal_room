@@ -30,8 +30,10 @@ from deal_room.stakeholders.cvar_preferences import (
 from models import DealRoomAction
 
 
-LOG2_6 = math.log(2, 6)
+LOG2_6 = math.log(6) / math.log(2)
 LOOKAHEAD_COST = 0.07
+REWARD_SCALE = 6.0
+REWARD_GAIN = 3.0
 
 
 def _entropy_base2(values: np.ndarray) -> float:
@@ -66,7 +68,9 @@ def compute_prediction_accuracy(
         predicted_tokens = set(predicted_text.split())
         actual_tokens = set(actual_text.split())
         union = predicted_tokens | actual_tokens
-        scores.append(len(predicted_tokens & actual_tokens) / len(union) if union else 0.0)
+        scores.append(
+            len(predicted_tokens & actual_tokens) / len(union) if union else 0.0
+        )
 
     return float(sum(scores) / len(scores))
 
@@ -75,15 +79,27 @@ def compute_prediction_accuracy(
 class UtteranceScore:
     goal: float = 0.0
     trust: float = 0.0
-    info: float = 0.0
+    information: float = 0.0
     risk: float = 0.0
     causal: float = 0.0
+    lookahead_used: bool = False
+    info: float = None
+
+    def __post_init__(self):
+        if self.info is not None:
+            self.information = self.info
+        if self.info is None:
+            self.info = self.information
+
+    @property
+    def _info_alias(self) -> float:
+        return self.information
 
     def weighted_sum(self, weights: Dict[str, float]) -> float:
         return (
             weights.get("goal", 1.0) * self.goal
             + weights.get("trust", 1.0) * self.trust
-            + weights.get("info", 1.0) * self.info
+            + weights.get("info", 1.0) * self.information
             + weights.get("risk", 1.0) * self.risk
             + weights.get("causal", 1.0) * self.causal
         )
@@ -92,9 +108,10 @@ class UtteranceScore:
         return {
             "goal": self.goal,
             "trust": self.trust,
-            "info": self.info,
+            "info": self.information,
             "risk": self.risk,
             "causal": self.causal,
+            "lookahead_used": float(self.lookahead_used),
         }
 
 
@@ -141,7 +158,12 @@ class UtteranceScorer:
             goal = max(0.0, goal - LOOKAHEAD_COST)
 
         return UtteranceScore(
-            goal=goal, trust=trust, info=info, risk=risk, causal=causal
+            goal=goal,
+            trust=trust,
+            information=info,
+            risk=risk,
+            causal=causal,
+            lookahead_used=lookahead_used,
         )
 
     def _score_goal(
@@ -195,7 +217,7 @@ class UtteranceScorer:
         )
 
         raw = 0.50 * approval_score + 0.30 * blocker_score + 0.20 * veto_score
-        return float(np.clip(0.5 + raw, 0.0, 1.0))
+        return float(0.5 + 0.5 * np.tanh((REWARD_GAIN * raw) * REWARD_SCALE))
 
     def _score_trust(
         self,
@@ -219,7 +241,7 @@ class UtteranceScorer:
         if not deltas:
             return 0.5
         mean_delta = sum(deltas) / len(deltas)
-        return float(np.clip(0.5 + mean_delta * 3.0, 0.0, 1.0))
+        return float(0.5 + 0.5 * np.tanh((REWARD_GAIN * mean_delta) * REWARD_SCALE))
 
     def _score_info(
         self,
@@ -238,7 +260,7 @@ class UtteranceScorer:
         if not reductions:
             return 0.5
         mean_reduction = sum(reductions) / len(reductions)
-        return float(np.clip(0.5 + mean_reduction * 5.0, 0.0, 1.0))
+        return float(0.5 + 0.5 * np.tanh((REWARD_GAIN * mean_reduction) * REWARD_SCALE))
 
     def _score_risk(
         self,
@@ -259,7 +281,7 @@ class UtteranceScorer:
         if not improvements:
             return 0.5
         mean_imp = sum(improvements) / len(improvements)
-        return float(np.clip(0.5 + mean_imp, 0.0, 1.0))
+        return float(0.5 + 0.5 * np.tanh((REWARD_GAIN * mean_imp) * REWARD_SCALE))
 
     def _score_causal(
         self,

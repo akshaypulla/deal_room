@@ -78,6 +78,7 @@ def test_10_4_colab_notebook_exists():
     for path in [
         "/app/env/deal_room/training/grpo_colab.ipynb",
         "/app/env/grpo_colab.ipynb",
+        "deal_room/training/grpo_colab.ipynb",
     ]:
         if os.path.exists(path):
             with open(path) as f:
@@ -91,7 +92,7 @@ def test_10_4_colab_notebook_exists():
             print(f"  ✓ Colab notebook at {path} ({len(nb['cells'])} cells)")
             return
 
-    raise AssertionError("grpo_colab.ipynb not found in /app/env/")
+    raise AssertionError("grpo_colab.ipynb not found")
 
 
 def test_10_5_training_loop_smoke_test():

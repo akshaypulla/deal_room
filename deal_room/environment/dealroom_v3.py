@@ -144,6 +144,7 @@ def _get_initial_beliefs(task_id: str, stakeholder_id: str) -> Dict[str, float]:
         )
     )
 
+
 @dataclass
 class StateSnapshot:
     beliefs: Dict[str, BeliefDistribution]
@@ -181,7 +182,7 @@ class ScenarioConfig:
 
 
 class DealRoomV3:
-    def __init__(self):
+    def __init__(self, use_llm_stakeholders: bool = False):
         global OBS_CONFIG
         OBS_CONFIG = _init_obs_config()
         self._rng: Optional[np.random.Generator] = None
@@ -197,6 +198,7 @@ class DealRoomV3:
         self._round_number: int = 0
         self._episode_id: str = ""
         self._veto_precursor_streaks: Dict[str, int] = {}
+        self._use_llm_stakeholders = use_llm_stakeholders
 
     @property
     def action_space(self) -> List[DealRoomAction]:
@@ -227,7 +229,9 @@ class DealRoomV3:
                 target="TechLead",
                 target_ids=["TechLead"],
                 message="Sharing implementation plan with delivery safeguards.",
-                documents=[{"name": "implementation_timeline", "content": "16-week plan"}],
+                documents=[
+                    {"name": "implementation_timeline", "content": "16-week plan"}
+                ],
             ),
         ]
 
@@ -331,7 +335,9 @@ class DealRoomV3:
 
         action = self._normalize_action(action)
         lookahead_was_requested = action.lookahead is not None
-        lookahead_result = self._run_lookahead(action) if lookahead_was_requested else None
+        lookahead_result = (
+            self._run_lookahead(action) if lookahead_was_requested else None
+        )
 
         state_before = StateSnapshot(
             beliefs=dict(self._beliefs),
@@ -385,7 +391,9 @@ class DealRoomV3:
 
         noisy_deltas = self._update_noisy_engagement(self._beliefs, previous_beliefs)
 
-        stakeholder_messages = self._generate_stakeholder_responses(action, previous_beliefs)
+        stakeholder_messages = self._generate_stakeholder_responses(
+            action, previous_beliefs
+        )
 
         reward, reward_components = self._compute_reward(
             action,
@@ -420,7 +428,9 @@ class DealRoomV3:
         self._state.step_count = self._step_count
         self._state.terminal_outcome = terminal_outcome
         self._state.veto_stakeholder = veto_stakeholder
-        self._state.deal_failed = bool(done and terminal_outcome and "deal_closed" not in terminal_outcome)
+        self._state.deal_failed = bool(
+            done and terminal_outcome and "deal_closed" not in terminal_outcome
+        )
         self._state.failure_reason = terminal_outcome
         self._state.deal_momentum = self._infer_deal_momentum(precursors)
 
@@ -445,8 +455,12 @@ class DealRoomV3:
             )
             info.update(
                 {
-                    "lookahead_predicted_deltas": dict(lookahead_result.predicted_belief_deltas),
-                    "lookahead_predicted_responses": dict(lookahead_result.predicted_responses),
+                    "lookahead_predicted_deltas": dict(
+                        lookahead_result.predicted_belief_deltas
+                    ),
+                    "lookahead_predicted_responses": dict(
+                        lookahead_result.predicted_responses
+                    ),
                     "lookahead_cvar_impact": dict(lookahead_result.cvar_impact),
                     "prediction_accuracy": prediction_accuracy,
                     "lookahead_prediction_accuracy": prediction_accuracy,
@@ -488,6 +502,24 @@ class DealRoomV3:
         self, sid: str, role: str, belief: BeliefDistribution, action: DealRoomAction
     ) -> str:
         pos_mass = belief.positive_mass()
+        stance = (
+            "supportive"
+            if pos_mass > 0.6
+            else ("neutral" if pos_mass > 0.4 else "skeptical")
+        )
+
+        if self._use_llm_stakeholders:
+            try:
+                from .stakeholder_llm import generate_stakeholder_response
+
+                action_desc = action.message or f"action: {action.action_type}"
+                context = f"Vendor sent a {action.action_type} to {sid}: {action_desc}"
+                return generate_stakeholder_response(
+                    sid, context, role=role, stance=stance
+                )
+            except Exception:
+                pass
+
         if pos_mass > 0.6:
             return f"Thank you for the {'document' if action.documents else 'message'}. I can see the merit in this approach and will review accordingly."
         elif pos_mass > 0.4:
@@ -609,7 +641,9 @@ class DealRoomV3:
             engagement_level=dict(self._noisy_engagement),
             weak_signals=weak_signals,
             known_constraints=[],
-            requested_artifacts=dict(self._state.requested_artifacts) if self._state else {},
+            requested_artifacts=dict(self._state.requested_artifacts)
+            if self._state
+            else {},
             approval_path_progress={
                 sid: {"band": "neutral"} for sid in STANDARD_STAKEHOLDERS
             },
@@ -619,7 +653,9 @@ class DealRoomV3:
             veto_precursors=veto_precursors,
             scenario_hint=None,
             active_blockers=self._state.active_blockers if self._state else [],
-            days_to_deadline=(self._state.offer_state or {}).get("days_to_deadline", 30) if self._state else 30,
+            days_to_deadline=(self._state.offer_state or {}).get("days_to_deadline", 30)
+            if self._state
+            else 30,
             done=done,
             info=info,
             engagement_level_delta=engagement_level_delta.get(primary_target, 0.0),
@@ -752,7 +788,11 @@ class DealRoomV3:
 
         normalized_target = action.target
         if normalized_target and normalized_target.lower() != "all":
-            normalized_target = ",".join(resolved_target_ids) if resolved_target_ids else normalized_target
+            normalized_target = (
+                ",".join(resolved_target_ids)
+                if resolved_target_ids
+                else normalized_target
+            )
 
         return action.model_copy(
             update={
@@ -763,7 +803,9 @@ class DealRoomV3:
 
     def _apply_action_to_offer_state(self, action: DealRoomAction) -> None:
         offer_state = dict(self._state.offer_state or {})
-        offer_state["days_to_deadline"] = max(0, offer_state.get("days_to_deadline", 30) - 1)
+        offer_state["days_to_deadline"] = max(
+            0, offer_state.get("days_to_deadline", 30) - 1
+        )
 
         for key, value in (action.proposed_terms or {}).items():
             offer_state[key] = value
@@ -776,22 +818,38 @@ class DealRoomV3:
             offer_state["has_dpa"] = True
         if any("security" in name or "cert" in name for name in document_names):
             offer_state["has_security_cert"] = True
-        if any("implementation" in name or "timeline" in name for name in document_names):
-            offer_state["timeline_weeks"] = min(offer_state.get("timeline_weeks", 12), 12)
+        if any(
+            "implementation" in name or "timeline" in name for name in document_names
+        ):
+            offer_state["timeline_weeks"] = min(
+                offer_state.get("timeline_weeks", 12), 12
+            )
         if any("roi" in name for name in document_names):
-            offer_state["price"] = max(75000, int(offer_state.get("price", 100000) * 0.95))
+            offer_state["price"] = max(
+                75000, int(offer_state.get("price", 100000) * 0.95)
+            )
 
         if action.action_type == "concession":
-            offer_state["price"] = max(70000, int(offer_state.get("price", 100000) * 0.90))
-            offer_state["liability_cap"] = max(offer_state.get("liability_cap", 1000000), 1500000)
+            offer_state["price"] = max(
+                70000, int(offer_state.get("price", 100000) * 0.90)
+            )
+            offer_state["liability_cap"] = max(
+                offer_state.get("liability_cap", 1000000), 1500000
+            )
         elif action.action_type == "exec_escalation":
             offer_state["price"] = int(offer_state.get("price", 100000) * 1.10)
-            offer_state["liability_cap"] = min(offer_state.get("liability_cap", 1000000), 250000)
+            offer_state["liability_cap"] = min(
+                offer_state.get("liability_cap", 1000000), 250000
+            )
         elif action.action_type == "walkaway_signal":
             offer_state["price"] = int(offer_state.get("price", 100000) * 1.05)
-            offer_state["liability_cap"] = min(offer_state.get("liability_cap", 1000000), 350000)
+            offer_state["liability_cap"] = min(
+                offer_state.get("liability_cap", 1000000), 350000
+            )
         elif action.action_type == "group_proposal" and not action.proposed_terms:
-            offer_state["liability_cap"] = min(offer_state.get("liability_cap", 1000000), 500000)
+            offer_state["liability_cap"] = min(
+                offer_state.get("liability_cap", 1000000), 500000
+            )
 
         self._state.offer_state = offer_state
 
@@ -890,18 +948,25 @@ class DealRoomV3:
     def _update_veto_precursor_streaks(self, precursors: Dict[str, str]) -> None:
         for sid in STANDARD_STAKEHOLDERS:
             if sid in precursors:
-                self._veto_precursor_streaks[sid] = self._veto_precursor_streaks.get(sid, 0) + 1
+                self._veto_precursor_streaks[sid] = (
+                    self._veto_precursor_streaks.get(sid, 0) + 1
+                )
             else:
                 self._veto_precursor_streaks[sid] = 0
 
-    def _check_for_veto(self, risk_snapshot: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    def _check_for_veto(
+        self, risk_snapshot: Dict[str, Any]
+    ) -> Tuple[bool, Optional[str]]:
         candidates: List[Tuple[float, str]] = []
         for sid in STANDARD_STAKEHOLDERS:
             profile = get_archetype(sid)
             if not profile or not profile.veto_power:
                 continue
             cvar_loss = risk_snapshot["cvar_losses"].get(sid, 0.0)
-            if cvar_loss > profile.tau and self._veto_precursor_streaks.get(sid, 0) >= 2:
+            if (
+                cvar_loss > profile.tau
+                and self._veto_precursor_streaks.get(sid, 0) >= 2
+            ):
                 candidates.append((cvar_loss - profile.tau, sid))
         if not candidates:
             return False, None
@@ -920,8 +985,14 @@ class DealRoomV3:
         )
 
         delta_scores: List[float] = []
-        for stakeholder_id, predicted_delta in lookahead_result.predicted_belief_deltas.items():
-            if stakeholder_id not in previous_beliefs or stakeholder_id not in self._beliefs:
+        for (
+            stakeholder_id,
+            predicted_delta,
+        ) in lookahead_result.predicted_belief_deltas.items():
+            if (
+                stakeholder_id not in previous_beliefs
+                or stakeholder_id not in self._beliefs
+            ):
                 continue
             actual_delta = (
                 self._beliefs[stakeholder_id].positive_mass()
@@ -930,7 +1001,9 @@ class DealRoomV3:
             delta_scores.append(max(0.0, 1.0 - abs(predicted_delta - actual_delta)))
 
         if delta_scores:
-            return float(0.5 * response_accuracy + 0.5 * (sum(delta_scores) / len(delta_scores)))
+            return float(
+                0.5 * response_accuracy + 0.5 * (sum(delta_scores) / len(delta_scores))
+            )
         return float(response_accuracy)
 
     def close(self) -> None:

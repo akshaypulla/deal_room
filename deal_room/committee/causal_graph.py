@@ -223,9 +223,16 @@ def propagate_beliefs(
                 )
                 total_delta += weight * delta_source
 
-            if abs(total_delta) > 0.005:
+            k_gate = 10.0
+            epsilon_floor = 0.003
+            scaled_delta = total_delta * (
+                abs(total_delta) / (abs(total_delta) + 1.0 / k_gate)
+            )
+            if abs(total_delta) > 0 and abs(scaled_delta) < epsilon_floor:
+                scaled_delta = np.sign(total_delta) * epsilon_floor
+            if abs(scaled_delta) > 1e-10:
                 next_beliefs[dest_id] = _apply_belief_delta(
-                    current_beliefs[dest_id], total_delta, damping=0.85**step
+                    current_beliefs[dest_id], scaled_delta, damping=0.95**step
                 )
 
         current_beliefs = next_beliefs
