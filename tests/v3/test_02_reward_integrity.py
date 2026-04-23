@@ -143,7 +143,9 @@ def test_2_2_lookahead_cost_is_exactly_007():
     assert abs(diff - expected_cost) < 0.015, (
         f"Lookahead goal cost should be {expected_cost:.3f}, got {diff:.3f} (goal1={goal1:.3f}, goal2={goal2:.3f})"
     )
-    assert "lookahead_predicted_deltas" in info2, "Lookahead diagnostics missing from info"
+    assert "lookahead_predicted_deltas" in info2, (
+        "Lookahead diagnostics missing from info"
+    )
 
     print(
         f"  ✓ goal cost = {diff:.4f} (expected 0.07, diff={abs(diff - expected_cost):.4f})"
@@ -204,7 +206,9 @@ def test_2_4_deterministic_reward_with_seed():
         seed = 100
         r = session.post(f"{BASE_URL}/reset", json={"task_id": "aligned", "seed": seed})
         session_id = r.json().get("metadata", {}).get("session_id")
-        action = make_action(session_id, "direct_message", ["Finance"], "Same message.", [])
+        action = make_action(
+            session_id, "direct_message", ["Finance"], "Same message.", []
+        )
 
         r = session.post(f"{BASE_URL}/step", json=action, timeout=60)
         reward = get_reward(r.json())
@@ -250,11 +254,11 @@ def test_2_6_different_targets_different_causal_scores():
     scores_by_target = {}
 
     for target in ["Finance", "Legal", "TechLead"]:
-        trials = []
-        for _ in range(3):
+        causal_scores = []
+        for seed in [60, 61, 62, 63, 64]:
             session = requests.Session()
             r = session.post(
-                f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": 60}
+                f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": seed}
             )
             session_id = r.json().get("metadata", {}).get("session_id")
 
@@ -269,19 +273,25 @@ def test_2_6_different_targets_different_causal_scores():
                 ),
                 timeout=60,
             )
-            reward = get_reward(r.json())
-            if reward is not None:
-                trials.append(reward)
+            info = r.json().get("info", {})
+            components = info.get("reward_components", {})
+            causal = components.get("causal")
+            if causal is not None:
+                causal_scores.append(float(causal))
 
-        if trials:
-            scores_by_target[target] = sum(trials) / len(trials)
+        if causal_scores:
+            scores_by_target[target] = sum(causal_scores) / len(causal_scores)
 
     unique_scores = len(set(round(v, 3) for v in scores_by_target.values()))
-    print(f"  target scores: { {k: f'{v:.3f}' for k, v in scores_by_target.items()} }")
-    assert unique_scores >= 2, (
-        f"All targets got identical scores — causal dimension not discriminative"
+    print(
+        f"  target causal scores: { {k: f'{v:.3f}' for k, v in scores_by_target.items()} }"
     )
-    print(f"  ✓ {unique_scores} distinct score values across targets")
+    assert unique_scores >= 2, (
+        f"All targets got identical causal scores — r^causal not discriminative across targets.\n"
+        f"Scores: {scores_by_target}\n"
+        f"NOTE: Legal may legitimately score 0.0 if it has 0 betweenness centrality in the sampled graph."
+    )
+    print(f"  ✓ {unique_scores} distinct causal score values across targets")
 
 
 def test_2_7_informative_action_outperforms_empty():
@@ -400,7 +410,9 @@ def test_2_9_good_documentation_higher_than_poor():
 
     for seed in [90, 91, 92]:
         session = requests.Session()
-        r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": seed})
+        r = session.post(
+            f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": seed}
+        )
         sid = r.json().get("metadata", {}).get("session_id")
 
         poor_action["metadata"]["session_id"] = sid
@@ -411,7 +423,9 @@ def test_2_9_good_documentation_higher_than_poor():
 
     for seed in [93, 94, 95]:
         session = requests.Session()
-        r = session.post(f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": seed})
+        r = session.post(
+            f"{BASE_URL}/reset", json={"task_id": "conflicted", "seed": seed}
+        )
         sid = r.json().get("metadata", {}).get("session_id")
 
         good_action["metadata"]["session_id"] = sid
@@ -431,7 +445,9 @@ def test_2_9_good_documentation_higher_than_poor():
         )
         print("  ✓ Good documentation rewarded at >= poor documentation")
     else:
-        raise AssertionError("Could not collect both poor and good documentation rewards")
+        raise AssertionError(
+            "Could not collect both poor and good documentation rewards"
+        )
 
 
 def test_2_10_lookahead_improves_prediction_accuracy():
@@ -471,7 +487,10 @@ def test_2_10_lookahead_improves_prediction_accuracy():
             timeout=60,
         )
         info = r.json().get("info", {})
-        if info.get("lookahead_used") and info.get("lookahead_prediction_accuracy") is not None:
+        if (
+            info.get("lookahead_used")
+            and info.get("lookahead_prediction_accuracy") is not None
+        ):
             accuracies.append(float(info["lookahead_prediction_accuracy"]))
 
     assert len(accuracies) >= LOOKAHEAD_MIN_RECORDED, (
