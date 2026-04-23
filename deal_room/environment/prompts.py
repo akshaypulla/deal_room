@@ -119,13 +119,10 @@ def build_situation_prompt(obs: DealRoomObservation) -> str:
         parts.append("")
 
     parts.append("=== AVAILABLE ACTIONS ===")
-    parts.append(
-        "Choose ONE of the following action formats. END EVERY ACTION WITH ###.\n"
-    )
-    parts.append("  send_document <target> <doc_type> ###")
-    parts.append(
-        "    Example: send_document Finance roi_model Here is our ROI model.###"
-    )
+    parts.append("Choose ONE action format. send_document does NOT need ###.\n")
+    parts.append("  send_document <target> <doc_type> [message]")
+    parts.append("    Example: send_document Finance roi_model Here is our ROI model.")
+    parts.append("    Example: send_document Finance roi_model")
     parts.append("    Available doc types: " + ", ".join(DOCUMENT_TYPES))
     parts.append("")
     parts.append("  direct_message <target> <message> ###")
@@ -144,7 +141,7 @@ def build_situation_prompt(obs: DealRoomObservation) -> str:
     parts.append("    Example: exec_escalation Requesting executive meeting.###")
     parts.append("")
     parts.append(
-        "Respond with EXACTLY ONE action ending in ###. No explanation. No JSON."
+        "send_document: one line, no ### needed. Other actions MUST end with ###."
     )
 
     return "\n".join(parts)
@@ -157,7 +154,7 @@ def build_situation_prompt(obs: DealRoomObservation) -> str:
 ACTION_PATTERNS = [
     (
         re.compile(
-            r"^\s*send_document\s+(\w+)\s+(\w+)(?:\s+(.+?))?\s*###\s*$",
+            r"^\s*send_document\s+(\w+)\s+(\w+)(?:\s+(.+?))?(?:\s*###\s*)?$",
             re.IGNORECASE | re.DOTALL,
         ),
         "send_document",
