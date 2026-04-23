@@ -120,35 +120,31 @@ def build_situation_prompt(obs: DealRoomObservation) -> str:
 
     parts.append("=== AVAILABLE ACTIONS ===")
     parts.append(
-        "Choose ONE of the following action formats and respond with ONLY that line:\n"
+        "Choose ONE of the following action formats. END EVERY ACTION WITH ###.\n"
     )
-    parts.append("  send_document <target> <doc_type> <message>")
+    parts.append("  send_document <target> <doc_type> ###")
     parts.append(
-        "    Example: send_document Finance roi_model Here is our ROI model with approval-friendly assumptions."
+        "    Example: send_document Finance roi_model Here is our ROI model.###"
     )
     parts.append("    Available doc types: " + ", ".join(DOCUMENT_TYPES))
     parts.append("")
-    parts.append("  direct_message <target> <message>")
+    parts.append("  direct_message <target> <message> ###")
     parts.append(
-        "    Example: direct_message Legal I want to address your compliance concerns directly."
+        "    Example: direct_message Legal I want to address your concerns.###"
     )
     parts.append("")
-    parts.append("  concession <target> <term>=<value>")
-    parts.append("    Example: concession Finance liability_cap=1500000")
-    parts.append("    Example: concession Operations timeline_weeks=12")
+    parts.append("  concession <target> <term>=<value> ###")
+    parts.append("    Example: concession Finance liability_cap=1500000###")
+    parts.append("    Example: concession Operations timeline_weeks=12###")
     parts.append("")
-    parts.append("  group_proposal <message>")
-    parts.append(
-        "    Example: group_proposal I propose we move to final contract review with the agreed terms."
-    )
+    parts.append("  group_proposal <message> ###")
+    parts.append("    Example: group_proposal I propose we finalize the terms.###")
     parts.append("")
-    parts.append("  exec_escalation <message>")
-    parts.append(
-        "    Example: exec_escalation I request an executive meeting to resolve the remaining blockers."
-    )
+    parts.append("  exec_escalation <message> ###")
+    parts.append("    Example: exec_escalation Requesting executive meeting.###")
     parts.append("")
     parts.append(
-        "Respond with EXACTLY ONE action line. No explanation. No JSON. Just the action."
+        "Respond with EXACTLY ONE action ending in ###. No explanation. No JSON."
     )
 
     return "\n".join(parts)
@@ -161,24 +157,37 @@ def build_situation_prompt(obs: DealRoomObservation) -> str:
 ACTION_PATTERNS = [
     (
         re.compile(
-            r"^\s*send_document\s+(\w+)\s+(\w+)\s+(.+)$", re.IGNORECASE | re.DOTALL
+            r"^\s*send_document\s+(\w+)\s+(\w+)(?:\s+(.+?))?\s*###\s*$",
+            re.IGNORECASE | re.DOTALL,
         ),
         "send_document",
     ),
     (
-        re.compile(r"^\s*direct_message\s+(\w+)\s+(.+)$", re.IGNORECASE | re.DOTALL),
+        re.compile(
+            r"^\s*direct_message\s+(\w+)\s+(.+?)\s*###\s*$",
+            re.IGNORECASE | re.DOTALL,
+        ),
         "direct_message",
     ),
     (
-        re.compile(r"^\s*concession\s+(\w+)\s+(\w+)=([\d.]+)\s*$", re.IGNORECASE),
+        re.compile(
+            r"^\s*concession\s+(\w+)\s+(\w+)=([\d.]+)\s*###\s*$",
+            re.IGNORECASE,
+        ),
         "concession",
     ),
     (
-        re.compile(r"^\s*group_proposal\s+(.+)$", re.IGNORECASE | re.DOTALL),
+        re.compile(
+            r"^\s*group_proposal\s+(.+?)\s*###\s*$",
+            re.IGNORECASE | re.DOTALL,
+        ),
         "group_proposal",
     ),
     (
-        re.compile(r"^\s*exec_escalation\s+(.+)$", re.IGNORECASE | re.DOTALL),
+        re.compile(
+            r"^\s*exec_escalation\s+(.+?)\s*###\s*$",
+            re.IGNORECASE | re.DOTALL,
+        ),
         "exec_escalation",
     ),
 ]
@@ -239,12 +248,12 @@ def parse_action_text(text: str) -> DealRoomAction:
             if action_type == "send_document":
                 target = _normalize_target(groups[0])
                 doc_type = _validate_doc_type(groups[1])
-                message = groups[2].strip()[:500]
+                message = (groups[2] or "").strip()[:500]
                 return DealRoomAction(
                     action_type="send_document",
                     target=target,
                     target_ids=[target] if target != "all" else STAKEHOLDER_NAMES,
-                    message=message,
+                    message=message or f"Sending {doc_type} document to {target}.",
                     documents=[{"type": doc_type, "name": doc_type.upper()}],
                 )
             elif action_type == "direct_message":
@@ -290,6 +299,7 @@ def parse_action_text(text: str) -> DealRoomAction:
 def _fallback_action(text: str) -> DealRoomAction:
     """Parse failure fallback — extract what we can or use safe default."""
     text = text.strip()
+    text = text.split("###")[0].strip()
 
     text_lower = text.lower()
 
