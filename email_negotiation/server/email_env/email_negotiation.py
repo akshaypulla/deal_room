@@ -2,7 +2,7 @@ import random
 import uuid
 from typing import Any, Dict, List, Optional
 
-from .email_message import EmailMessage
+from .email_message import EmailMessage, EmailAttachment
 from .inbox import EmailInbox
 from .buyer_stakeholder import StatefulArchetypeAgent, ARCHETYPE_PROFILES
 from .reward_extractor import RewardExtractor, compute_terminal_reward
@@ -125,6 +125,8 @@ class EmailNegotiationCore:
 
         response_data = self._generate_stakeholder_response(target, action_dict)
 
+        self._add_email_to_inbox(target, action_dict, response_data)
+
         step_reward, breakdown = self._compute_reward(action_dict, response_data)
 
         self._update_agents(target, response_data, action_dict)
@@ -173,6 +175,30 @@ class EmailNegotiationCore:
         agent = self._agents[target]
         inbox_msgs = [m.body for m in self._inbox.all_messages[-5:]] if self._inbox else []
         return agent.generate_email_response(action_dict, inbox_msgs)
+
+    def _add_email_to_inbox(self, target: str, action_dict: Dict, response_data: Dict) -> None:
+        if not self._inbox or target not in self._inbox.stakeholder_inboxes:
+            return
+        subject_map = {
+            "address_concern": "Question about your requirements",
+            "offer_document": f"Document: {action_dict.get('include_document', 'Materials')}",
+            "make_concession": "Proposed adjustment to terms",
+            "escalate_to_exec": "Request for executive engagement",
+            "group_proposal": "Comprehensive proposal",
+            "walkaway": "Closing the conversation",
+        }
+        subject = subject_map.get(action_dict.get("intent", ""), "Email from seller")
+        body = response_data.get("reply", "")
+        msg = EmailMessage(
+            from_addr="seller@company.com",
+            to_addr=target,
+            cc=action_dict.get("cc", []),
+            subject=subject,
+            body=body,
+            document_type=action_dict.get("include_document"),
+            attachments=[action_dict["include_document"]] if action_dict.get("include_document") else [],
+        )
+        self._inbox.deliver_email(msg)
 
     def _compute_reward(self, action_dict: Dict, response_data: Dict) -> tuple:
         raw_reward, breakdown = self._reward_extractor.extract(response_data, action_dict)

@@ -65,7 +65,10 @@ def _compute_concern_resolution(resolved: int, total: int) -> float:
 
 def compute_shaping_reward(current_score: float, previous_score: float) -> float:
     delta = current_score - previous_score
-    return max(-0.5, min(0.5, 2.0 * delta))
+    shaping = max(-0.5, min(0.5, 2.0 * delta))
+    if previous_score > 0.05 and delta < 0.005:
+        shaping -= 0.05
+    return shaping
 
 
 def apply_progress_gating(tone_base: float, progress_score: float) -> float:

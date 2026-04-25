@@ -91,6 +91,8 @@ class StatefulArchetypeAgent:
         target = sender_action.get("target", "")
         tone = sender_action.get("tone", "formal")
         document = sender_action.get("include_document")
+        concession_term = sender_action.get("concession_term", "")
+        inbox_text = " ".join(inbox_messages).lower() if inbox_messages else ""
 
         concerns_raised = []
         sentiment = "neutral"
@@ -100,26 +102,68 @@ class StatefulArchetypeAgent:
         if document:
             self.docs_received.append(document)
 
+        positive_patterns = [
+            "thank", "appreciate", "received", "reviewed", "looks good",
+            "clear", "acceptable", "agreed", "approved", "proceed",
+        ]
+        skeptical_patterns = [
+            "concern", "issue", "problem", "unclear", "cannot", "reject",
+            "insufficient", "violation", "non-compliant", "risk",
+        ]
+
+        doc_refs = {
+            "DPA": ["dpa", "data protection", "privacy"],
+            "roi_model": ["roi", "return", "financial", "budget"],
+            "security_cert": ["security", "cert", "compliance", "soc2"],
+            "implementation_timeline": ["timeline", "schedule", "milestone"],
+            "vendor_packet": ["vendor", "packet", "overview"],
+        }
+
         if intent == "address_concern":
-            if random.random() > 0.5:
-                concerns_raised = [random.choice(topics)] if topics else []
-                sentiment = "skeptical"
-            else:
+            action_message = sender_action.get("message", "").lower()
+            mentions_topic = any(t in action_message for t in topics)
+            prior_skeptical = any(s in inbox_text for s in skeptical_patterns)
+
+            if mentions_topic and prior_skeptical:
+                sentiment = "positive"
                 if self.current_concerns:
                     self.current_concerns.pop(0)
-                sentiment = "positive"
                 self.alignment_score = min(1.0, self.alignment_score + 0.1)
+                concerns_raised = []
+            elif mentions_topic:
+                sentiment = "positive"
+                if self.current_concerns:
+                    self.current_concerns.pop(0)
+                self.alignment_score = min(1.0, self.alignment_score + 0.08)
+                concerns_raised = []
+            else:
+                concerns_raised = [random.choice(topics)] if topics else []
+                sentiment = "skeptical"
+                self.alignment_score = max(0.0, self.alignment_score - 0.05)
 
         elif intent == "offer_document":
-            sentiment = "positive"
-            self.alignment_score = min(1.0, self.alignment_score + 0.05)
+            doc_mentioned_in_reply = False
             if document:
+                ref_terms = doc_refs.get(document.upper(), [])
+                doc_mentioned_in_reply = any(t in inbox_text for t in ref_terms)
                 self.docs_acknowledged.append(document)
 
+            if doc_mentioned_in_reply or not self.current_concerns:
+                sentiment = "positive"
+                self.alignment_score = min(1.0, self.alignment_score + 0.08)
+            else:
+                concerns_raised = [random.choice(topics)] if topics else []
+                sentiment = "skeptical"
+                self.alignment_score = max(0.0, self.alignment_score - 0.03)
+
         elif intent == "make_concession":
+            if concession_term:
+                terms_mentioned.append(concession_term)
+            prior_request = any(t in inbox_text for t in [concession_term] if concession_term)
             sentiment = "positive"
-            self.alignment_score = min(1.0, self.alignment_score + 0.15)
-            terms_mentioned.append(sender_action.get("concession_term", "price"))
+            self.alignment_score = min(1.0, self.alignment_score + 0.12)
+            if self.current_concerns:
+                self.current_concerns.pop(0)
 
         elif intent == "walkaway":
             sentiment = "skeptical"
@@ -128,6 +172,19 @@ class StatefulArchetypeAgent:
 
         elif intent == "escalate_to_exec":
             escalation = True
+            sentiment = "neutral"
+            self.alignment_score = max(0.0, self.alignment_score - 0.05)
+
+        elif intent == "group_proposal":
+            cc = sender_action.get("cc", [])
+            if len(cc) >= 2:
+                sentiment = "positive"
+                self.alignment_score = min(1.0, self.alignment_score + 0.1)
+            elif len(cc) == 1:
+                sentiment = "skeptical"
+                self.alignment_score = min(1.0, self.alignment_score + 0.03)
+            else:
+                sentiment = "neutral"
 
         self.engagement_level = min(1.0, self.engagement_level + 0.05)
         self.sentiment_history.append(sentiment)
@@ -143,15 +200,97 @@ class StatefulArchetypeAgent:
             "alignment_delta": self._compute_alignment_delta(sentiment, concerns_raised, escalation),
         }
 
-    def _build_response_body(self, sentiment: str, concerns: List[str], intent: str, tone: str) -> str:
+    def _build_response_body(
+        self, sentiment: str, concerns: List[str], intent: str, tone: str
+    ) -> str:
         greeting = "Dear Seller," if tone == "formal" else "Hi,"
+        document = self.docs_received[-1] if self.docs_received else None
+        doc_mentions = {
+            "DPA": "the Data Protection Agreement",
+            "ROI_MODEL": "the ROI model",
+            "SECURITY_CERT": "the security certification",
+            "IMPLEMENTATION_TIMELINE": "the implementation timeline",
+            "VENDOR_PACKET": "the vendor capability overview",
+            "DPA": "the DPA",
+            "ROI_MODEL": "the ROI analysis",
+            "SECURITY_CERT": "the security certificate",
+            "IMPLEMENTATION_TIMELINE": "the implementation plan",
+            "VENDOR_PACKET": "the vendor packet",
+        }
+
         if sentiment == "positive":
-            return f"{greeting}\n\nThank you for the update. We appreciate the progress and look forward to reviewing the details.\n\nBest regards,\n{self.stakeholder_id}"
+            if intent == "offer_document" and document:
+                doc_ref = doc_mentions.get(document.upper(), document)
+                return (
+                    f"{greeting}\n\n"
+                    f"Thank you for providing {doc_ref}. We have reviewed the materials "
+                    f"and find them acceptable. We look forward to proceeding.\n\n"
+                    f"Best regards,\n{self.stakeholder_id}"
+                )
+            if intent == "make_concession":
+                return (
+                    f"{greeting}\n\n"
+                    f"Thank you for the concession. We appreciate your flexibility and "
+                    f"are prepared to move forward on this basis.\n\n"
+                    f"Best regards,\n{self.stakeholder_id}"
+                )
+            if intent == "group_proposal" and len(self.docs_acknowledged) >= 2:
+                return (
+                    f"{greeting}\n\n"
+                    f"Thank you for the comprehensive proposal. We have reviewed the materials "
+                    f"across all dimensions and are satisfied with the terms.\n\n"
+                    f"Best regards,\n{self.stakeholder_id}"
+                )
+            if self.docs_acknowledged:
+                return (
+                    f"{greeting}\n\n"
+                    f"Thank you for the update. We appreciate the progress and look "
+                    f"forward to reviewing the details.\n\n"
+                    f"Best regards,\n{self.stakeholder_id}"
+                )
+            return (
+                f"{greeting}\n\n"
+                f"Thank you for the update. We appreciate the progress and look "
+                f"forward to reviewing the details.\n\n"
+                f"Best regards,\n{self.stakeholder_id}"
+            )
         elif sentiment == "skeptical":
             concern_str = ", ".join(concerns) if concerns else "the current terms"
-            return f"{greeting}\n\nWe still have concerns regarding {concern_str}. Please provide additional clarification before we can proceed.\n\nBest regards,\n{self.stakeholder_id}"
+            if intent == "offer_document" and document:
+                doc_ref = doc_mentions.get(document.upper(), document)
+                return (
+                    f"{greeting}\n\n"
+                    f"We have reviewed {doc_ref}, but still have concerns regarding "
+                    f"{concern_str}. Please provide additional clarification.\n\n"
+                    f"Best regards,\n{self.stakeholder_id}"
+                )
+            if intent == "make_concession":
+                return (
+                    f"{greeting}\n\n"
+                    f"We appreciate the concession, but {concern_str} still needs to be "
+                    f"addressed before we can proceed.\n\n"
+                    f"Best regards,\n{self.stakeholder_id}"
+                )
+            return (
+                f"{greeting}\n\n"
+                f"We still have concerns regarding {concern_str}. "
+                f"Please provide additional clarification before we can proceed.\n\n"
+                f"Best regards,\n{self.stakeholder_id}"
+            )
         else:
-            return f"{greeting}\n\nWe are reviewing the materials and will respond shortly.\n\nBest regards,\n{self.stakeholder_id}"
+            if intent == "offer_document" and document:
+                doc_ref = doc_mentions.get(document.upper(), document)
+                return (
+                    f"{greeting}\n\n"
+                    f"We have received {doc_ref} and will review it shortly. "
+                    f"We will follow up with any questions.\n\n"
+                    f"Best regards,\n{self.stakeholder_id}"
+                )
+            return (
+                f"{greeting}\n\n"
+                f"We are reviewing the materials and will respond shortly.\n\n"
+                f"Best regards,\n{self.stakeholder_id}"
+            )
 
     def _compute_alignment_delta(self, sentiment: str, concerns: List[str], escalation: bool) -> float:
         delta = 0.0

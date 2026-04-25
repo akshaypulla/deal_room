@@ -21,7 +21,7 @@ class RewardExtractor:
         reward_breakdown = {}
         total = 0.0
 
-        sentiment_reward, sentiment_key = self._extract_sentiment_trust(sentiment)
+        sentiment_reward, sentiment_key = self._extract_sentiment_trust(sentiment, action_data)
         reward_breakdown[sentiment_key] = sentiment_reward
         total += sentiment_reward
 
@@ -41,18 +41,20 @@ class RewardExtractor:
         reward_breakdown[cc_key] = cc_reward
         total += cc_reward
 
-        concern_reward, concern_key = self._extract_concern_resolution(reply, concerns_raised)
+        concern_reward, concern_key = self._extract_concern_resolution(
+            reply, concerns_raised, sentiment
+        )
         reward_breakdown[concern_key] = concern_reward
         total += concern_reward
 
         self.last_reward = total
         return total, reward_breakdown
 
-    def _extract_sentiment_trust(self, sentiment: str) -> Tuple[float, str]:
+    def _extract_sentiment_trust(self, sentiment: str, action_data: Dict = None) -> Tuple[float, str]:
         if sentiment == "positive":
-            return 0.15, "sentiment_positive"
+            return 0.1, "sentiment_positive"
         elif sentiment == "skeptical":
-            return -0.1, "sentiment_skeptical"
+            return -0.15, "sentiment_skeptical"
         return 0.0, "sentiment_neutral"
 
     def _extract_engagement(self, reply: str, concerns_raised: List[str]) -> Tuple[float, str]:
@@ -67,8 +69,23 @@ class RewardExtractor:
         doc = action_data.get("include_document")
         if not doc:
             return 0.0, "doc_none"
-        if any(w in reply for w in DOC_REFERENCES) or "attached" in reply or "received" in reply:
-            return 0.1, "doc_acknowledged"
+        ref_terms = {
+            "DPA": ["dpa", "data protection", "privacy", "liability"],
+            "ROI_MODEL": ["roi", "return", "financial", "budget", "justified"],
+            "SECURITY_CERT": ["security", "cert", "compliance", "soc2", "audit"],
+            "IMPLEMENTATION_TIMELINE": ["timeline", "schedule", "milestone", "plan"],
+            "VENDOR_PACKET": ["vendor", "packet", "overview", "capabilities"],
+        }
+        doc_key = doc.upper().replace("_", "_")
+        relevant_terms = ref_terms.get(doc_key, [])
+        mentioned = any(t in reply for t in relevant_terms)
+        acknowledged = ("attached" in reply or "received" in reply or "review" in reply)
+        if mentioned and acknowledged:
+            return 0.2, "doc_acknowledged"
+        elif mentioned:
+            return 0.1, "doc_mentioned"
+        elif acknowledged:
+            return 0.05, "doc_sent"
         return 0.0, "doc_sent"
 
     def _extract_objection(self, reply: str) -> Tuple[float, str]:
@@ -87,10 +104,16 @@ class RewardExtractor:
             return -0.05, "cc_unacknowledged"
         return 0.0, "cc_acknowledged"
 
-    def _extract_concern_resolution(self, reply: str, concerns_raised: List[str]) -> Tuple[float, str]:
+    def _extract_concern_resolution(
+        self, reply: str, concerns_raised: List[str], sentiment: str
+    ) -> Tuple[float, str]:
         if not concerns_raised:
-            return 0.2, "concern_resolved"
-        return -0.1, "concern_new"
+            if sentiment == "positive":
+                return 0.2, "concern_resolved"
+            return 0.0, "concern_none"
+        if sentiment == "skeptical":
+            return -0.15, "concern_raised_skeptical"
+        return -0.1, "concern_raised"
 
 
 def compute_terminal_reward(outcome: str) -> float:

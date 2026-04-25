@@ -57,14 +57,25 @@ class AntiGamingValidator:
     def _check_policy_constraints(self, action: Dict) -> Optional[str]:
         if self._action_history:
             last = self._action_history[-1]
+
+            intent = action.get("intent", "")
+            target = action.get("target", "")
+            last_intent = last.get("intent", "")
+            last_target = last.get("target", "")
+
             if action == last:
                 return "Identical consecutive action"
 
-        recent_3 = self._action_history[-3:] if self._action_history else []
-        target = action.get("target", "")
-        target_recent_count = sum(1 for a in recent_3 if a.get("target") == target)
-        if target_recent_count >= 2:
-            return f"Target {target} already targeted 2x in last 3 steps"
+            if intent == last_intent and target == last_target:
+                return f"Same intent+target as last step ({intent} -> {target})"
+
+            recent_3 = self._action_history[-3:] if len(self._action_history) >= 3 else list(self._action_history)
+            target_recent_count = sum(1 for a in recent_3 if a.get("target") == target)
+            if target_recent_count >= 2 and len(recent_3) >= 2:
+                return f"Target {target} already targeted 2x in last 3 steps"
+
+            if intent == "walkaway" and last_intent == "walkaway":
+                return "Consecutive walkaway"
 
         intent = action.get("intent", "")
         self._intent_counts[intent] = self._intent_counts.get(intent, 0) + 1
