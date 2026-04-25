@@ -1,11 +1,11 @@
 import os
-from openenv.core import create_fastapi_app
+from openenv.core.env_server.http_server import create_app
 
 from models import EmailAction, EmailObservation
 from server.environment import EmailNegotiationEnvironment
 
 
-app = create_fastapi_app(EmailNegotiationEnvironment, EmailAction, EmailObservation)
+app = create_app(EmailNegotiationEnvironment, EmailAction, EmailObservation)
 
 
 def main():

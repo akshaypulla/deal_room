@@ -215,9 +215,11 @@ class EmailNegotiationCore:
             agent = self._agents[target]
             delta = response_data.get("alignment_delta", 0.0)
             agent.alignment_score = max(0.0, min(1.0, agent.alignment_score + delta))
-            if response_data.get("concerns_raised"):
-                agent.current_concerns.extend(response_data["concerns_raised"])
-            if response_data["sentiment"] == "positive" and not response_data["concerns_raised"]:
+            new_concerns = response_data.get("concerns_raised", [])
+            for c in new_concerns:
+                if c not in agent.current_concerns:
+                    agent.current_concerns.append(c)
+            if response_data["sentiment"] == "positive" and not new_concerns:
                 self._concerns_resolved += 1
             agent.update_memory(f"Step {self._step_count}: {response_data['sentiment']} response")
 
