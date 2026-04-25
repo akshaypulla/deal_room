@@ -264,3 +264,7 @@ class EmailNegotiationCore:
             "done": done,
             "reward_breakdown": reward_breakdown or {},
         }
+
+    def close(self) -> None:
+        """No-op for API compatibility with DealRoomTextEnv.close()."""
+        pass
