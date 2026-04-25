@@ -169,8 +169,8 @@ ACTION_PATTERNS = [
     ),
     (
         re.compile(
-            r"^\s*concession\s+(\w+)\s+(\w+)=([\d.]+)\s*###\s*$",
-            re.IGNORECASE,
+            r"^\s*concession\s+(\w+)\s+(\w+)=([\d.]+)(?:\s+(.+?))?\s*###\s*$",
+            re.IGNORECASE | re.DOTALL,
         ),
         "concession",
     ),
@@ -184,6 +184,13 @@ ACTION_PATTERNS = [
     (
         re.compile(
             r"^\s*exec_escalation\s+(.+?)\s*###\s*$",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        "exec_escalation",
+    ),
+    (
+        re.compile(
+            r"^\s*exec_escalation\s+(.+?)$",
             re.IGNORECASE | re.DOTALL,
         ),
         "exec_escalation",
@@ -267,11 +274,14 @@ def parse_action_text(text: str) -> DealRoomAction:
                 target = _normalize_target(groups[0])
                 term_key = groups[1].strip().lower()
                 term_value = float(groups[2])
+                message = (
+                    groups[3] or f"Concession offered on {term_key}={term_value}"
+                ).strip()[:500]
                 return DealRoomAction(
                     action_type="concession",
                     target=target,
                     target_ids=[target],
-                    message=f"Concession offered on {term_key}.",
+                    message=message,
                     proposed_terms={term_key: term_value},
                 )
             elif action_type == "group_proposal":
